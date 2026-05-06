@@ -17,9 +17,7 @@ describe("htmlToText", () => {
   });
 
   it("separates block elements with newlines", () => {
-    expect(htmlToText("<p>one</p><p>two</p><p>three</p>")).toBe(
-      "one\ntwo\nthree",
-    );
+    expect(htmlToText("<p>one</p><p>two</p><p>three</p>")).toBe("one\ntwo\nthree");
   });
 
   it("collapses runs of 3+ newlines into a single blank line", () => {
@@ -32,31 +30,25 @@ describe("htmlToText", () => {
   });
 
   it("renders anchors as 'text (href)'", () => {
-    expect(
-      htmlToText('see <a href="https://example.com/x">the docs</a>'),
-    ).toBe("see the docs (https://example.com/x)");
+    expect(htmlToText('see <a href="https://example.com/x">the docs</a>')).toBe(
+      "see the docs (https://example.com/x)",
+    );
   });
 
   it("formats table rows with pipe separators and newlines", () => {
     expect(
-      htmlToText(
-        "<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>",
-      ),
+      htmlToText("<table><tr><td>a</td><td>b</td></tr><tr><td>c</td><td>d</td></tr></table>"),
     ).toContain("| a | b");
   });
 
   it("decodes named and numeric HTML entities", () => {
-    expect(htmlToText("a&nbsp;b&amp;c&lt;d&gt;e&quot;f&#39;g&apos;h")).toBe(
-      `a b&c<d>e"f'g'h`,
-    );
+    expect(htmlToText("a&nbsp;b&amp;c&lt;d&gt;e&quot;f&#39;g&apos;h")).toBe(`a b&c<d>e"f'g'h`);
     expect(htmlToText("&hellip; &mdash; &ndash;")).toBe("… — –");
     expect(htmlToText("&#65;&#9731;")).toBe("A☃");
   });
 
   it("strips angle-bracket attributes without leaving fragments", () => {
-    expect(htmlToText('<img src="x.png" alt="y"><span class="z">hi</span>')).toBe(
-      "hi",
-    );
+    expect(htmlToText('<img src="x.png" alt="y"><span class="z">hi</span>')).toBe("hi");
   });
 
   it("trims and removes leading/trailing whitespace per line", () => {

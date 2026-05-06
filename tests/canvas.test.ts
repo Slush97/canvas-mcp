@@ -13,9 +13,7 @@ describe("parseNextLink", () => {
       '<https://x.test/api/v1/courses?page=2>; rel="next",' +
       '<https://x.test/api/v1/courses?page=5>; rel="last",' +
       '<https://x.test/api/v1/courses?page=1>; rel="first"';
-    expect(parseNextLink(header)).toBe(
-      "https://x.test/api/v1/courses?page=2",
-    );
+    expect(parseNextLink(header)).toBe("https://x.test/api/v1/courses?page=2");
   });
 
   it("returns null when no next rel is present", () => {
@@ -69,9 +67,7 @@ describe("CanvasClient", () => {
 
   it("sends Bearer auth and Accept JSON on GET", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockResponse({ id: 1 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockResponse({ id: 1 }));
 
     const result = await client.get<{ id: number }>("/users/self");
 
@@ -84,9 +80,7 @@ describe("CanvasClient", () => {
 
   it("encodes array params with [] suffix and scalars normally", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockResponse([]));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockResponse([]));
 
     await client.get("/courses", {
       enrollment_state: "active",
@@ -103,9 +97,7 @@ describe("CanvasClient", () => {
 
   it("skips undefined and null params", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockResponse([]));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockResponse([]));
 
     await client.get("/courses", { a: undefined, b: null, c: "keep" });
 
@@ -117,9 +109,7 @@ describe("CanvasClient", () => {
 
   it("throws with status and a body excerpt on non-2xx", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      mockResponse("nope, no.", { status: 403 }),
-    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockResponse("nope, no.", { status: 403 }));
 
     const err = await client.get("/x").catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
@@ -157,9 +147,7 @@ describe("CanvasClient", () => {
 
   it("write returns undefined on 204 No Content", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response(null, { status: 204 }),
-    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const result = await client.delete<unknown>("/conversations/1");
     expect(result).toBeUndefined();
@@ -167,9 +155,7 @@ describe("CanvasClient", () => {
 
   it("write sends JSON body and Content-Type header on POST", async () => {
     const client = new CanvasClient({ baseUrl, token });
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockResponse({ id: 99 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(mockResponse({ id: 99 }));
 
     await client.post("/things", { name: "x" });
 

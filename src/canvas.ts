@@ -16,9 +16,7 @@ export class CanvasClient {
   }
 
   private buildUrl(path: string, params?: QueryParams): string {
-    const url = path.startsWith("http")
-      ? new URL(path)
-      : new URL(`${this.baseUrl}/api/v1${path}`);
+    const url = path.startsWith("http") ? new URL(path) : new URL(`${this.baseUrl}/api/v1${path}`);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
         if (value === undefined || value === null) continue;
@@ -41,7 +39,9 @@ export class CanvasClient {
     });
     if (!res.ok) {
       const body = await res.text();
-      throw new Error(`Canvas API ${res.status} ${res.statusText} for ${url}: ${body.slice(0, 500)}`);
+      throw new Error(
+        `Canvas API ${res.status} ${res.statusText} for ${url}: ${body.slice(0, 500)}`,
+      );
     }
     return res;
   }
@@ -67,7 +67,7 @@ export class CanvasClient {
     method: "POST" | "PUT" | "DELETE",
     path: string,
     body?: unknown,
-    params?: QueryParams
+    params?: QueryParams,
   ): Promise<T> {
     const url = this.buildUrl(path, params);
     const res = await fetch(url, {
@@ -82,7 +82,7 @@ export class CanvasClient {
     if (!res.ok) {
       const txt = await res.text();
       throw new Error(
-        `Canvas API ${res.status} ${res.statusText} for ${method} ${url}: ${txt.slice(0, 500)}`
+        `Canvas API ${res.status} ${res.statusText} for ${method} ${url}: ${txt.slice(0, 500)}`,
       );
     }
     if (res.status === 204) return undefined as T;

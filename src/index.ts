@@ -28,7 +28,7 @@ server.registerTool(
     description: "Return the authenticated Canvas user. Use to verify the token and base URL.",
     inputSchema: {},
   },
-  async () => json(await canvas.get("/users/self"))
+  async () => json(await canvas.get("/users/self")),
 );
 
 server.registerTool(
@@ -40,9 +40,7 @@ server.registerTool(
         .enum(["active", "invited_or_pending", "completed"])
         .optional()
         .describe("Filter by enrollment state. Defaults to all."),
-      include: z
-        .array(z.enum(["term", "teachers", "total_students", "syllabus_body"]))
-        .optional(),
+      include: z.array(z.enum(["term", "teachers", "total_students", "syllabus_body"])).optional(),
     },
   },
   async ({ enrollment_state, include }) => {
@@ -68,9 +66,9 @@ server.registerTool(
         if (want.has("total_students")) out.total_students = c.total_students;
         if (want.has("syllabus_body")) out.syllabus = htmlToText(c.syllabus_body, 4000);
         return out;
-      })
+      }),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -101,15 +99,16 @@ server.registerTool(
         html_url: a.html_url,
         has_submitted_submissions: a.has_submitted_submissions,
         locked_for_user: a.locked_for_user,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
   "upcoming_assignments",
   {
-    description: "List assignments due within the next N days across all active courses, sorted by due date.",
+    description:
+      "List assignments due within the next N days across all active courses, sorted by due date.",
     inputSchema: {
       days: z
         .number()
@@ -145,12 +144,12 @@ server.registerTool(
             points_possible: a.points_possible,
             html_url: a.html_url,
           }));
-      })
+      }),
     );
 
     const flat = perCourse.flat().sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at));
     return json(flat);
-  }
+  },
 );
 
 server.registerTool(
@@ -182,9 +181,9 @@ server.registerTool(
         author: a.author?.display_name,
         url: a.html_url,
         message: htmlToText(a.message, 4000),
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -224,9 +223,9 @@ server.registerTool(
         location: e.location_name,
         context_code: e.context_code,
         url: e.html_url,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -249,7 +248,7 @@ server.registerTool(
     if (module_id != null) {
       const m = await canvas.get<any>(
         `/courses/${course_id}/modules/${module_id}`,
-        include ? { include } : undefined
+        include ? { include } : undefined,
       );
       const items =
         include_items && !m.items
@@ -295,9 +294,9 @@ server.registerTool(
           url: it.url,
           completion_requirement: it.completion_requirement,
         })),
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -319,19 +318,18 @@ server.registerTool(
         points_possible: t.assignment?.points_possible,
         submitted: t.assignment?.has_submitted_submissions,
         html_url: t.html_url,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
   "grades_overview",
   {
-    description: "Current and final grades for each of the user's courses (uses Canvas total_scores).",
+    description:
+      "Current and final grades for each of the user's courses (uses Canvas total_scores).",
     inputSchema: {
-      enrollment_state: z
-        .enum(["active", "invited_or_pending", "completed"])
-        .default("active"),
+      enrollment_state: z.enum(["active", "invited_or_pending", "completed"]).default("active"),
     },
   },
   async ({ enrollment_state }) => {
@@ -353,9 +351,9 @@ server.registerTool(
           unposted_current_score: e?.unposted_current_score,
           unposted_final_score: e?.unposted_final_score,
         };
-      })
+      }),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -394,9 +392,9 @@ server.registerTool(
           submission_type: s?.submission_type,
           attempt: s?.attempt,
         };
-      })
+      }),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -435,7 +433,7 @@ server.registerTool(
           created_at: f.created_at,
           updated_at: f.updated_at,
           locked_for_user: f.locked_for_user,
-        }))
+        })),
       );
     } catch (e) {
       if (!/^Canvas API 403/.test(String((e as Error).message))) throw e;
@@ -454,11 +452,11 @@ server.registerTool(
             module: m.name,
             html_url: it.html_url,
             api_url: it.url,
-          }))
+          })),
       );
       return json(items);
     }
-  }
+  },
 );
 
 // ─── Deep reads ──────────────────────────────────────────────────────────────
@@ -466,7 +464,8 @@ server.registerTool(
 server.registerTool(
   "assignment_details",
   {
-    description: "Full assignment info: instructions (HTML stripped to text), rubric, allowed submission types.",
+    description:
+      "Full assignment info: instructions (HTML stripped to text), rubric, allowed submission types.",
     inputSchema: {
       course_id: z.number().int(),
       assignment_id: z.number().int(),
@@ -499,13 +498,14 @@ server.registerTool(
       })),
       has_submitted: a.submission?.workflow_state === "submitted" || a.has_submitted_submissions,
     });
-  }
+  },
 );
 
 server.registerTool(
   "submission_feedback",
   {
-    description: "Get the user's submission for an assignment, with grade, instructor comments, and rubric assessment.",
+    description:
+      "Get the user's submission for an assignment, with grade, instructor comments, and rubric assessment.",
     inputSchema: {
       course_id: z.number().int(),
       assignment_id: z.number().int(),
@@ -514,7 +514,7 @@ server.registerTool(
   async ({ course_id, assignment_id }) => {
     const s = await canvas.get<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions/self`,
-      { include: ["submission_comments", "rubric_assessment"] }
+      { include: ["submission_comments", "rubric_assessment"] },
     );
     return json({
       assignment_id: s.assignment_id,
@@ -557,7 +557,7 @@ server.registerTool(
           }))
         : undefined,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -577,7 +577,7 @@ server.registerTool(
       syllabus: htmlToText(c.syllabus_body, 12000),
       html_url: `${baseUrl}/courses/${c.id}/assignments/syllabus`,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -603,9 +603,9 @@ server.registerTool(
         published: q.published,
         locked_for_user: q.locked_for_user,
         html_url: q.html_url,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -618,9 +618,7 @@ server.registerTool(
     },
   },
   async ({ course_id, quiz_id }) => {
-    const data = await canvas.get<any>(
-      `/courses/${course_id}/quizzes/${quiz_id}/submissions`
-    );
+    const data = await canvas.get<any>(`/courses/${course_id}/quizzes/${quiz_id}/submissions`);
     const subs = data.quiz_submissions ?? [];
     return json(
       subs.map((s: any) => ({
@@ -634,9 +632,9 @@ server.registerTool(
         kept_score: s.kept_score,
         workflow_state: s.workflow_state,
         html_url: s.html_url,
-      }))
+      })),
     );
-  }
+  },
 );
 
 // ─── Communication: conversations (Canvas inbox) ─────────────────────────────
@@ -647,10 +645,7 @@ server.registerTool(
     description: "List Canvas conversations (the inbox). Use scope to filter.",
     inputSchema: {
       scope: z.enum(["unread", "starred", "archived", "sent"]).optional(),
-      filter: z
-        .array(z.string())
-        .optional()
-        .describe('Filter by context, e.g. ["course_46061"].'),
+      filter: z.array(z.string()).optional().describe('Filter by context, e.g. ["course_46061"].'),
       limit: z
         .number()
         .int()
@@ -685,7 +680,7 @@ server.registerTool(
         };
       }),
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -697,7 +692,7 @@ server.registerTool(
   async ({ conversation_id }) => {
     const c = await canvas.get<any>(`/conversations/${conversation_id}`);
     const nameById = new Map<number, string>(
-      (c.participants ?? []).map((p: any) => [p.id, p.full_name ?? p.name])
+      (c.participants ?? []).map((p: any) => [p.id, p.full_name ?? p.name]),
     );
     return json({
       id: c.id,
@@ -715,7 +710,7 @@ server.registerTool(
         })),
       })),
     });
-  }
+  },
 );
 
 // ─── Discussions (announcements are also discussion_topics) ──────────────────
@@ -734,7 +729,7 @@ server.registerTool(
       only_announcements: false,
     });
     const filtered = topics.filter(
-      (t) => !t.is_announcement && (!only_unread || (t.unread_count ?? 0) > 0)
+      (t) => !t.is_announcement && (!only_unread || (t.unread_count ?? 0) > 0),
     );
     return json(
       filtered.map((t) => ({
@@ -750,9 +745,9 @@ server.registerTool(
         author: t.author?.display_name,
         html_url: t.html_url,
         message_preview: htmlToText(t.message, 400),
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -770,7 +765,7 @@ server.registerTool(
       canvas.get<any>(`/courses/${course_id}/discussion_topics/${topic_id}/view`),
     ]);
     const nameById = new Map<number, string>(
-      (view.participants ?? []).map((p: any) => [p.id, p.display_name ?? p.name])
+      (view.participants ?? []).map((p: any) => [p.id, p.display_name ?? p.name]),
     );
     const flat: any[] = [];
     const walk = (entries: any[], parentId: number | null) => {
@@ -799,7 +794,7 @@ server.registerTool(
       entry_count: flat.length,
       entries: flat,
     });
-  }
+  },
 );
 
 // ─── Pages ───────────────────────────────────────────────────────────────────
@@ -827,7 +822,7 @@ server.registerTool(
           created_at: p.created_at,
           updated_at: p.updated_at,
           html_url: p.html_url,
-        }))
+        })),
       );
     } catch (e) {
       if (!/^Canvas API 40[34]/.test(String((e as Error).message))) throw e;
@@ -841,15 +836,15 @@ server.registerTool(
           .filter((it: any) => !needle || (it.title ?? "").toLowerCase().includes(needle))
           .map((it: any) => ({
             source: "modules" as const,
-            url: typeof it.url === "string" ? it.url.split("/pages/").pop() ?? null : null,
+            url: typeof it.url === "string" ? (it.url.split("/pages/").pop() ?? null) : null,
             title: it.title,
             module: m.name,
             html_url: it.html_url,
-          }))
+          })),
       );
       return json(items);
     }
-  }
+  },
 );
 
 server.registerTool(
@@ -870,7 +865,7 @@ server.registerTool(
       html_url: p.html_url,
       body: htmlToText(p.body, 12000),
     });
-  }
+  },
 );
 
 // ─── Composites ──────────────────────────────────────────────────────────────
@@ -892,9 +887,7 @@ server.registerTool(
     });
     const real = courses.filter((c) => c.id);
     const courseIds = real.map((c) => c.id);
-    const courseLookup = new Map<number, string>(
-      real.map((c) => [c.id, c.course_code ?? c.name])
-    );
+    const courseLookup = new Map<number, string>(real.map((c) => [c.id, c.course_code ?? c.name]));
 
     const now = Date.now();
     const ahead = now + lookahead_days * 86400000;
@@ -911,8 +904,8 @@ server.registerTool(
           canvas.paginate<any>(`/courses/${id}/assignments`, {
             bucket: "future",
             include: ["submission"],
-          })
-        )
+          }),
+        ),
       ),
       canvas.paginate<any>("/users/self/todo"),
     ]);
@@ -925,7 +918,8 @@ server.registerTool(
         name: a.name,
         due_at: a.due_at,
         points_possible: a.points_possible,
-        submitted: a.submission?.workflow_state === "submitted" || a.submission?.submitted_at != null,
+        submitted:
+          a.submission?.workflow_state === "submitted" || a.submission?.submitted_at != null,
         html_url: a.html_url,
       }))
       .sort((a, b) => Date.parse(a.due_at) - Date.parse(b.due_at));
@@ -965,7 +959,7 @@ server.registerTool(
         points_possible: t.assignment?.points_possible,
       })),
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1039,7 +1033,7 @@ server.registerTool(
         items_count: m.items_count,
       })),
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1062,9 +1056,7 @@ server.registerTool(
     const courses = await canvas.paginate<any>("/courses", { enrollment_state: "active" });
     const real = courses.filter((c) => c.id);
     const courseIds = real.map((c) => c.id);
-    const courseLookup = new Map<number, string>(
-      real.map((c) => [c.id, c.course_code ?? c.name])
-    );
+    const courseLookup = new Map<number, string>(real.map((c) => [c.id, c.course_code ?? c.name]));
 
     const [announcements, perCourseAssignments] = await Promise.all([
       courseIds.length
@@ -1075,8 +1067,8 @@ server.registerTool(
         : Promise.resolve([]),
       Promise.all(
         courseIds.map((id) =>
-          canvas.paginate<any>(`/courses/${id}/assignments`, { include: ["submission"] })
-        )
+          canvas.paginate<any>(`/courses/${id}/assignments`, { include: ["submission"] }),
+        ),
       ),
     ]);
 
@@ -1129,7 +1121,7 @@ server.registerTool(
       new_assignments: newAssignments,
       newly_graded: newGrades,
     });
-  }
+  },
 );
 
 // ─── People, groups, activity ────────────────────────────────────────────────
@@ -1165,9 +1157,9 @@ server.registerTool(
         sortable_name: u.sortable_name,
         email: u.email,
         roles: (u.enrollments ?? []).map((e: any) => e.type),
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -1196,9 +1188,9 @@ server.registerTool(
         type: r.type ?? (typeof r.id === "string" ? "context" : "user"),
         common_courses: r.common_courses,
         user_count: r.user_count,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -1219,9 +1211,9 @@ server.registerTool(
         group_category_id: g.group_category_id,
         is_public: g.is_public,
         join_level: g.join_level,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -1238,7 +1230,7 @@ server.registerTool(
   },
   async ({ only_active }) => {
     const items = await canvas.get<any[]>("/users/self/activity_stream");
-    const filtered = only_active ? (items ?? []).filter((i: any) => !i.read_state) : items ?? [];
+    const filtered = only_active ? (items ?? []).filter((i: any) => !i.read_state) : (items ?? []);
     return json(
       filtered.map((i: any) => ({
         id: i.id,
@@ -1251,9 +1243,9 @@ server.registerTool(
         created_at: i.created_at,
         updated_at: i.updated_at,
         url: i.html_url,
-      }))
+      })),
     );
-  }
+  },
 );
 
 server.registerTool(
@@ -1269,7 +1261,7 @@ server.registerTool(
   async ({ course_id, assignment_id }) => {
     const s = await canvas.get<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions/self`,
-      { include: ["submission_history"] }
+      { include: ["submission_history"] },
     );
     const attempts = s.submission_history ?? [];
     return json(
@@ -1294,9 +1286,9 @@ server.registerTool(
           size: f.size,
           url: f.url,
         })),
-      }))
+      })),
     );
-  }
+  },
 );
 
 // ─── Writes ──────────────────────────────────────────────────────────────────
@@ -1334,7 +1326,7 @@ server.registerTool(
         last_message_at: c.last_message_at,
       })),
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1348,10 +1340,7 @@ server.registerTool(
         .enum(["read", "unread", "archived"])
         .optional()
         .describe("Workflow state. Omit to leave unchanged."),
-      starred: z
-        .boolean()
-        .optional()
-        .describe("Star/unstar. Omit to leave unchanged."),
+      starred: z.boolean().optional().describe("Star/unstar. Omit to leave unchanged."),
     },
   },
   async ({ conversation_id, state, starred }) => {
@@ -1370,7 +1359,7 @@ server.registerTool(
       workflow_state: data.workflow_state,
       starred: data.starred,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1386,7 +1375,7 @@ server.registerTool(
   async ({ course_id, topic_id }) => {
     await canvas.put(`/courses/${course_id}/discussion_topics/${topic_id}/read`);
     return json({ ok: true, topic_id });
-  }
+  },
 );
 
 server.registerTool(
@@ -1413,7 +1402,7 @@ server.registerTool(
       user_id: e.user_id,
       message: htmlToText(e.message, 500),
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1430,7 +1419,7 @@ server.registerTool(
   async ({ course_id, assignment_id, body }) => {
     const s = await canvas.post<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions`,
-      { submission: { submission_type: "online_text_entry", body } }
+      { submission: { submission_type: "online_text_entry", body } },
     );
     return json({
       id: s.id,
@@ -1439,7 +1428,7 @@ server.registerTool(
       workflow_state: s.workflow_state,
       preview_url: s.preview_url,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1456,7 +1445,7 @@ server.registerTool(
   async ({ course_id, assignment_id, url }) => {
     const s = await canvas.post<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions`,
-      { submission: { submission_type: "online_url", url } }
+      { submission: { submission_type: "online_url", url } },
     );
     return json({
       id: s.id,
@@ -1466,7 +1455,7 @@ server.registerTool(
       url: s.url,
       preview_url: s.preview_url,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1483,7 +1472,7 @@ server.registerTool(
   async ({ course_id, assignment_id, text }) => {
     const s = await canvas.put<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions/self`,
-      { comment: { text_comment: text } }
+      { comment: { text_comment: text } },
     );
     const comments = s.submission_comments ?? [];
     const last = comments[comments.length - 1];
@@ -1498,7 +1487,7 @@ server.registerTool(
           }
         : undefined,
     });
-  }
+  },
 );
 
 server.registerTool(
@@ -1530,11 +1519,11 @@ server.registerTool(
 
       const init = await canvas.post<any>(
         `/courses/${course_id}/assignments/${assignment_id}/submissions/self/files`,
-        { name, size, content_type: ct }
+        { name, size, content_type: ct },
       );
       if (!init.upload_url || !init.upload_params) {
         throw new Error(
-          `Canvas upload init returned no upload_url for ${name}: ${JSON.stringify(init).slice(0, 300)}`
+          `Canvas upload init returned no upload_url for ${name}: ${JSON.stringify(init).slice(0, 300)}`,
         );
       }
 
@@ -1583,7 +1572,7 @@ server.registerTool(
 
     const s = await canvas.post<any>(
       `/courses/${course_id}/assignments/${assignment_id}/submissions`,
-      { submission: { submission_type: "online_upload", file_ids: fileIds } }
+      { submission: { submission_type: "online_upload", file_ids: fileIds } },
     );
     return json({
       id: s.id,
@@ -1593,7 +1582,7 @@ server.registerTool(
       file_ids: fileIds,
       preview_url: s.preview_url,
     });
-  }
+  },
 );
 
 const transport = new StdioServerTransport();

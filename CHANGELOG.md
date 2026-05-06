@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrapping, Link-header pagination). 28 tests, no live Canvas required.
 - `parseNextLink` is now exported from `src/canvas.ts` so its
   Link-header parsing can be exercised in isolation.
+- GitHub Actions CI: typecheck + build + test on Node 20 and 22.
+- Prettier config (`.prettierrc.json`, `.prettierignore`) and
+  `format` / `format:check` npm scripts. Existing source reformatted.
 
 ## [0.1.0] — 2026-05-05
 

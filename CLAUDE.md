@@ -6,7 +6,7 @@ Repo guide for Claude Code (and other AI agents) working in this codebase.
 
 A Model Context Protocol server that gives an AI client read/write access to a
 Canvas LMS account using a personal access token. Student-focused. TypeScript,
-Node 20+, MCP SDK over stdio.
+Node 22+, MCP SDK over stdio.
 
 ## Layout
 
@@ -39,7 +39,7 @@ npm run format:check  # CI-friendly check (matches what CI runs)
 ```
 
 CI (`.github/workflows/ci.yml`) runs `format:check`, `typecheck`, `build`, and
-`test` on Node 20 and 22 for every push and PR to `master`.
+`test` on Node 22 and 24 for every push and PR to `master`.
 
 ## Conventions
 

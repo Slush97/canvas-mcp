@@ -15,8 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrapping, Link-header pagination). 28 tests, no live Canvas required.
 - `parseNextLink` is now exported from `src/canvas.ts` so its
   Link-header parsing can be exercised in isolation.
-- GitHub Actions CI: typecheck + build + test on Node 20 and 22, plus
-  `prettier --check`.
+- GitHub Actions CI: typecheck + build + test on Node 22 and 24, plus
+  `prettier --check`. Action runtimes opted into Node 24 via
+  `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
+- `engines.node: ">=22"` in `package.json`. `@types/node` bumped to `^24`.
 - Prettier config (`.prettierrc.json`, `.prettierignore`) and
   `format` / `format:check` npm scripts. Existing source reformatted.
 - `CLAUDE.md` repo guide for AI agents.

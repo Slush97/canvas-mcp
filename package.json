@@ -10,6 +10,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
@@ -25,7 +28,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@types/node": "^22.7.0",
+    "@types/node": "^24.0.0",
     "prettier": "^3.8.3",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

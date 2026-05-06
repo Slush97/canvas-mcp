@@ -1,0 +1,49 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- MIT `LICENSE`.
+- `CHANGELOG.md` (this file).
+
+## [0.1.0] — 2026-05-05
+
+Initial public version. 38 tools, student-focused, all returning JSON. Write
+tools are tagged `(write)` in the README; there is no undo for them.
+
+### Added
+- **Identity & courses**: `whoami`, `list_courses`, `course_syllabus`,
+  `course_dashboard`.
+- **Assignments & grades**: `list_assignments`, `upcoming_assignments`,
+  `assignment_details`, `assignment_status`, `submission_feedback`,
+  `submission_history`, `grades_overview`.
+- **Quizzes**: `list_quizzes`, `quiz_submissions`.
+- **Calendar & to-do**: `list_calendar_events`, `todo`, `activity_stream`,
+  `weekly_digest`, `what_changed_since`.
+- **Announcements & discussions**: `list_announcements`, `list_discussions`,
+  `read_discussion`, `reply_discussion` *(write)*,
+  `mark_discussion_read` *(write)*.
+- **Conversations**: `inbox`, `read_conversation`,
+  `send_message` *(write)*, `mark_conversation` *(write)*.
+- **People & groups**: `course_roster`, `search_recipients`, `course_groups`.
+- **Modules, files, pages**: `list_modules`, `course_files`, `list_pages`,
+  `read_page`.
+- **Submissions**: `submit_assignment_text` *(write)*,
+  `submit_assignment_url` *(write)*, `submit_assignment_file` *(write)*
+  (3-step Canvas upload), `add_submission_comment` *(write)*.
+
+### Notes
+- Transparent fallbacks for institutions that restrict the bulk Pages and
+  Files endpoints — `list_pages` and `course_files` scan module items when
+  the index returns 404/403.
+- `list_calendar_events` defaults `context_codes` to all active courses and
+  `type` to `assignment`, since Canvas's own defaults return nothing useful
+  at many institutions.
+
+[Unreleased]: https://github.com/Slush97/canvas-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Slush97/canvas-mcp/releases/tag/v0.1.0

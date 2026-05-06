@@ -220,7 +220,26 @@ server.registerTool(
     const modules = await canvas.paginate<any>(`/courses/${course_id}/modules`, {
       include: include_items ? ["items"] : undefined,
     });
-    return json(modules);
+    return json(
+      modules.map((m) => ({
+        id: m.id,
+        name: m.name,
+        position: m.position,
+        state: m.state,
+        items_count: m.items_count,
+        unlock_at: m.unlock_at,
+        items: m.items?.map((it: any) => ({
+          id: it.id,
+          type: it.type,
+          title: it.title,
+          position: it.position,
+          indent: it.indent,
+          html_url: it.html_url,
+          url: it.url,
+          completion_requirement: it.completion_requirement,
+        })),
+      }))
+    );
   }
 );
 
@@ -230,7 +249,159 @@ server.registerTool(
     description: "List the user's Canvas to-do items (assignments needing attention).",
     inputSchema: {},
   },
-  async () => json(await canvas.paginate("/users/self/todo"))
+  async () => {
+    const items = await canvas.paginate<any>("/users/self/todo");
+    return json(
+      items.map((t) => ({
+        type: t.type,
+        course_id: t.course_id,
+        course: t.context_name,
+        assignment_id: t.assignment?.id,
+        name: t.assignment?.name,
+        due_at: t.assignment?.due_at,
+        points_possible: t.assignment?.points_possible,
+        submitted: t.assignment?.has_submitted_submissions,
+        html_url: t.html_url,
+      }))
+    );
+  }
+);
+
+server.registerTool(
+  "grades_overview",
+  {
+    description: "Current and final grades for each of the user's courses (uses Canvas total_scores).",
+    inputSchema: {
+      enrollment_state: z
+        .enum(["active", "invited_or_pending", "completed"])
+        .default("active"),
+    },
+  },
+  async ({ enrollment_state }) => {
+    const courses = await canvas.paginate<any>("/courses", {
+      enrollment_state,
+      include: ["total_scores", "term"],
+    });
+    return json(
+      courses.map((c) => {
+        const e = c.enrollments?.[0];
+        return {
+          course_id: c.id,
+          course: c.course_code ?? c.name,
+          term: c.term?.name,
+          current_grade: e?.computed_current_grade,
+          current_score: e?.computed_current_score,
+          final_grade: e?.computed_final_grade,
+          final_score: e?.computed_final_score,
+          unposted_current_score: e?.unposted_current_score,
+          unposted_final_score: e?.unposted_final_score,
+        };
+      })
+    );
+  }
+);
+
+server.registerTool(
+  "assignment_status",
+  {
+    description:
+      "List assignments for a course with the user's submission state, score, and late/missing/excused flags.",
+    inputSchema: {
+      course_id: z.number().int(),
+      bucket: z
+        .enum(["past", "overdue", "undated", "ungraded", "unsubmitted", "upcoming", "future"])
+        .optional(),
+    },
+  },
+  async ({ course_id, bucket }) => {
+    const assignments = await canvas.paginate<any>(`/courses/${course_id}/assignments`, {
+      bucket,
+      include: ["submission"],
+    });
+    return json(
+      assignments.map((a) => {
+        const s = a.submission;
+        return {
+          id: a.id,
+          name: a.name,
+          due_at: a.due_at,
+          points_possible: a.points_possible,
+          html_url: a.html_url,
+          submitted_at: s?.submitted_at,
+          workflow_state: s?.workflow_state,
+          score: s?.score,
+          grade: s?.grade,
+          missing: s?.missing,
+          late: s?.late,
+          excused: s?.excused,
+          submission_type: s?.submission_type,
+          attempt: s?.attempt,
+        };
+      })
+    );
+  }
+);
+
+server.registerTool(
+  "course_files",
+  {
+    description:
+      "List files in a course. Tries the direct files API first; if the institution restricts it (403), falls back to scanning module items for File-type entries.",
+    inputSchema: {
+      course_id: z.number().int(),
+      search_term: z
+        .string()
+        .min(3)
+        .optional()
+        .describe("Filter by filename substring (Canvas requires >=3 chars)."),
+      content_types: z
+        .array(z.string())
+        .optional()
+        .describe('MIME filter, e.g. ["application/pdf"]. Ignored in modules fallback.'),
+    },
+  },
+  async ({ course_id, search_term, content_types }) => {
+    try {
+      const files = await canvas.paginate<any>(`/courses/${course_id}/files`, {
+        search_term,
+        content_types,
+      });
+      return json(
+        files.map((f) => ({
+          source: "files" as const,
+          id: f.id,
+          display_name: f.display_name,
+          filename: f.filename,
+          size: f.size,
+          content_type: f["content-type"],
+          url: f.url,
+          created_at: f.created_at,
+          updated_at: f.updated_at,
+          locked_for_user: f.locked_for_user,
+        }))
+      );
+    } catch (e) {
+      if (!/^Canvas API 403/.test(String((e as Error).message))) throw e;
+      const modules = await canvas.paginate<any>(`/courses/${course_id}/modules`, {
+        include: ["items"],
+      });
+      const needle = search_term?.toLowerCase();
+      const items = modules.flatMap((m: any) =>
+        (m.items ?? [])
+          .filter((it: any) => it.type === "File")
+          .filter((it: any) => !needle || (it.title ?? "").toLowerCase().includes(needle))
+          .map((it: any) => ({
+            source: "modules" as const,
+            id: it.content_id ?? null,
+            display_name: it.title,
+            module: m.name,
+            html_url: it.html_url,
+            api_url: it.url,
+          }))
+      );
+      return json(items);
+    }
+  }
 );
 
 const transport = new StdioServerTransport();

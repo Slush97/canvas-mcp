@@ -1023,5 +1023,156 @@ server.registerTool(
   }
 );
 
+// ─── Writes ──────────────────────────────────────────────────────────────────
+
+server.registerTool(
+  "send_message",
+  {
+    description:
+      "Send a Canvas conversation. Recipients are user ids as strings. Set group_conversation=false to fan out as separate threads (e.g., emailing several students individually).",
+    inputSchema: {
+      recipients: z
+        .array(z.string())
+        .min(1)
+        .describe('User ids as strings, e.g. ["1234"]. "self" also works.'),
+      body: z.string().min(1),
+      subject: z.string().optional(),
+      context_code: z.string().optional().describe('e.g. "course_46061" to attach to a course.'),
+      group_conversation: z.boolean().default(true),
+    },
+  },
+  async ({ recipients, body, subject, context_code, group_conversation }) => {
+    const data = await canvas.post<any>("/conversations", {
+      recipients,
+      body,
+      subject,
+      context_code,
+      group_conversation,
+    });
+    const list = Array.isArray(data) ? data : [data];
+    return json({
+      created: list.length,
+      conversations: list.map((c: any) => ({
+        id: c.id,
+        subject: c.subject,
+        last_message_at: c.last_message_at,
+      })),
+    });
+  }
+);
+
+server.registerTool(
+  "mark_conversation",
+  {
+    description: "Mark a conversation as read or unread.",
+    inputSchema: {
+      conversation_id: z.number().int(),
+      state: z.enum(["read", "unread"]).default("read"),
+    },
+  },
+  async ({ conversation_id, state }) => {
+    const data = await canvas.put<any>(`/conversations/${conversation_id}`, {
+      conversation: { workflow_state: state },
+    });
+    return json({ id: data.id, workflow_state: data.workflow_state });
+  }
+);
+
+server.registerTool(
+  "mark_discussion_read",
+  {
+    description:
+      "Mark a discussion topic or announcement as read for the user (announcements are discussion topics in Canvas).",
+    inputSchema: {
+      course_id: z.number().int(),
+      topic_id: z.number().int(),
+    },
+  },
+  async ({ course_id, topic_id }) => {
+    await canvas.put(`/courses/${course_id}/discussion_topics/${topic_id}/read`);
+    return json({ ok: true, topic_id });
+  }
+);
+
+server.registerTool(
+  "reply_discussion",
+  {
+    description:
+      "Post a reply to a discussion topic. If parent_entry_id is set, the reply is nested under that entry.",
+    inputSchema: {
+      course_id: z.number().int(),
+      topic_id: z.number().int(),
+      message: z.string().min(1),
+      parent_entry_id: z.number().int().optional(),
+    },
+  },
+  async ({ course_id, topic_id, message, parent_entry_id }) => {
+    const path = parent_entry_id
+      ? `/courses/${course_id}/discussion_topics/${topic_id}/entries/${parent_entry_id}/replies`
+      : `/courses/${course_id}/discussion_topics/${topic_id}/entries`;
+    const e = await canvas.post<any>(path, { message });
+    return json({
+      id: e.id,
+      parent_id: e.parent_id ?? parent_entry_id ?? null,
+      created_at: e.created_at,
+      user_id: e.user_id,
+      message: htmlToText(e.message, 500),
+    });
+  }
+);
+
+server.registerTool(
+  "submit_assignment_text",
+  {
+    description:
+      "Submit an assignment as online_text_entry. Verify the assignment accepts this submission_type via assignment_details first.",
+    inputSchema: {
+      course_id: z.number().int(),
+      assignment_id: z.number().int(),
+      body: z.string().min(1).describe("Text/HTML body to submit."),
+    },
+  },
+  async ({ course_id, assignment_id, body }) => {
+    const s = await canvas.post<any>(
+      `/courses/${course_id}/assignments/${assignment_id}/submissions`,
+      { submission: { submission_type: "online_text_entry", body } }
+    );
+    return json({
+      id: s.id,
+      attempt: s.attempt,
+      submitted_at: s.submitted_at,
+      workflow_state: s.workflow_state,
+      preview_url: s.preview_url,
+    });
+  }
+);
+
+server.registerTool(
+  "submit_assignment_url",
+  {
+    description:
+      "Submit an assignment as online_url. Verify the assignment accepts this submission_type via assignment_details first.",
+    inputSchema: {
+      course_id: z.number().int(),
+      assignment_id: z.number().int(),
+      url: z.string().url(),
+    },
+  },
+  async ({ course_id, assignment_id, url }) => {
+    const s = await canvas.post<any>(
+      `/courses/${course_id}/assignments/${assignment_id}/submissions`,
+      { submission: { submission_type: "online_url", url } }
+    );
+    return json({
+      id: s.id,
+      attempt: s.attempt,
+      submitted_at: s.submitted_at,
+      workflow_state: s.workflow_state,
+      url: s.url,
+      preview_url: s.preview_url,
+    });
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

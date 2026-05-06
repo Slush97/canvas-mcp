@@ -51,6 +51,50 @@ export class CanvasClient {
     return (await res.json()) as T;
   }
 
+  async post<T>(path: string, body?: unknown, params?: QueryParams): Promise<T> {
+    return this.write<T>("POST", path, body, params);
+  }
+
+  async put<T>(path: string, body?: unknown, params?: QueryParams): Promise<T> {
+    return this.write<T>("PUT", path, body, params);
+  }
+
+  async delete<T>(path: string, params?: QueryParams): Promise<T> {
+    return this.write<T>("DELETE", path, undefined, params);
+  }
+
+  private async write<T>(
+    method: "POST" | "PUT" | "DELETE",
+    path: string,
+    body?: unknown,
+    params?: QueryParams
+  ): Promise<T> {
+    const url = this.buildUrl(path, params);
+    const res = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(
+        `Canvas API ${res.status} ${res.statusText} for ${method} ${url}: ${txt.slice(0, 500)}`
+      );
+    }
+    if (res.status === 204) return undefined as T;
+    const text = await res.text();
+    if (!text) return undefined as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return text as unknown as T;
+    }
+  }
+
   async paginate<T>(path: string, params?: QueryParams): Promise<T[]> {
     const all: T[] = [];
     let url: string | null = this.buildUrl(path, { per_page: 100, ...params });

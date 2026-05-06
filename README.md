@@ -140,6 +140,7 @@ Workflow recipes that turn multi-tool calls into a single command. See [`skills/
 
 - **`canvas-week-plan`** — Sunday-night ritual. Overdue first, then this-week-by-day, then graded work and announcements. Built around `weekly_digest` + `assignment_status`.
 - **`canvas-catch-up`** — what changed since a moment in time (default: 24h ago). New grades, announcements, messages, assignments. Built around `what_changed_since`.
+- **`canvas-submit-assignment`** — preview-then-confirm gate around the `submit_assignment_*` write tools. Refuses on type mismatch, warns on past-`lock_at`, verifies via `submission_history` after.
 
 ## Security
 

@@ -21,11 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `format` / `format:check` npm scripts. Existing source reformatted.
 - `CLAUDE.md` repo guide for AI agents.
 - Dependabot config (weekly npm grouped by dev/prod, monthly Actions).
-- Two skills under `skills/`:
+- Three skills under `skills/`:
   - **`canvas-week-plan`** — prioritized weekly plan from `weekly_digest`
     + per-course `assignment_status`.
   - **`canvas-catch-up`** — diff since a moment, built around
     `what_changed_since` with an `activity_stream` cross-check.
+  - **`canvas-submit-assignment`** — preview-then-confirm gate around the
+    `submit_assignment_*` write tools, with submission-type validation
+    and post-submit verification via `submission_history`.
 
 ## [0.1.0] — 2026-05-05
 

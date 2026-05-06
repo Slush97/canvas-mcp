@@ -1,0 +1,26 @@
+{
+  "name": "canvas-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Canvas LMS (student-focused tools).",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "canvas-mcp": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

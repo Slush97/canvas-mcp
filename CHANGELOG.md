@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `what_changed_since` now delegates to a shared `computeChangedSince`
   helper, which `catch_up` also uses. No change to its public signature.
+- `CanvasClient` now caches single-shot `get` results in-memory for 60s,
+  keyed by full URL with query. `paginate` is not cached. Any write
+  (`post`/`put`/`delete`) clears the cache. Helps the burst pattern that
+  composites like `weekly_digest` produce. Set `CANVAS_NO_CACHE=1` to
+  disable.
+- `CanvasClient` now retries a request once on `429` or on `403` whose
+  body matches `/rate.?limit/i`, after a 2-second pause. If the retry
+  also fails, the original Canvas error is surfaced.
 
 ## [0.2.0] — 2026-05-06
 

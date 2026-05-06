@@ -6,13 +6,28 @@ export interface CanvasClientOptions {
   token: string;
 }
 
+const CACHE_TTL_MS = 60_000;
+const CACHE_MAX = 256;
+const RETRY_DELAY_MS = 2000;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+function isRateLimitedResponse(status: number, body: string): boolean {
+  if (status === 429) return true;
+  if (status === 403 && /rate.?limit/i.test(body)) return true;
+  return false;
+}
+
 export class CanvasClient {
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly cacheEnabled: boolean;
+  private readonly cache = new Map<string, { value: unknown; expiresAt: number }>();
 
   constructor({ baseUrl, token }: CanvasClientOptions) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = token;
+    this.cacheEnabled = process.env.CANVAS_NO_CACHE !== "1";
   }
 
   private buildUrl(path: string, params?: QueryParams): string {
@@ -30,25 +45,68 @@ export class CanvasClient {
     return url.toString();
   }
 
-  private async request(url: string): Promise<Response> {
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        Accept: "application/json",
-      },
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      throw new Error(
-        `Canvas API ${res.status} ${res.statusText} for ${url}: ${body.slice(0, 500)}`,
-      );
+  private cacheGet(key: string): unknown {
+    if (!this.cacheEnabled) return undefined;
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+    if (entry.expiresAt < Date.now()) {
+      this.cache.delete(key);
+      return undefined;
     }
-    return res;
+    this.cache.delete(key);
+    this.cache.set(key, entry);
+    return entry.value;
+  }
+
+  private cacheSet(key: string, value: unknown): void {
+    if (!this.cacheEnabled) return;
+    if (this.cache.size >= CACHE_MAX) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
+    }
+    this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  private async fetchWithRetry(url: string, init: RequestInit, method: string): Promise<Response> {
+    let res = await fetch(url, init);
+    if (res.ok) return res;
+    let body = await res.text();
+    if (isRateLimitedResponse(res.status, body)) {
+      await sleep(RETRY_DELAY_MS);
+      res = await fetch(url, init);
+      if (res.ok) return res;
+      body = await res.text();
+    }
+    throw new Error(
+      `Canvas API ${res.status} ${res.statusText} for ${method} ${url}: ${body.slice(0, 500)}`,
+    );
+  }
+
+  private async request(url: string): Promise<Response> {
+    return this.fetchWithRetry(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          Accept: "application/json",
+        },
+      },
+      "GET",
+    );
   }
 
   async get<T>(path: string, params?: QueryParams): Promise<T> {
-    const res = await this.request(this.buildUrl(path, params));
-    return (await res.json()) as T;
+    const url = this.buildUrl(path, params);
+    const cached = this.cacheGet(url);
+    if (cached !== undefined) return cached as T;
+    const res = await this.request(url);
+    const value = (await res.json()) as T;
+    this.cacheSet(url, value);
+    return value;
   }
 
   async post<T>(path: string, body?: unknown, params?: QueryParams): Promise<T> {
@@ -70,21 +128,20 @@ export class CanvasClient {
     params?: QueryParams,
   ): Promise<T> {
     const url = this.buildUrl(path, params);
-    const res = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
+    const res = await this.fetchWithRetry(
+      url,
+      {
+        method,
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(
-        `Canvas API ${res.status} ${res.statusText} for ${method} ${url}: ${txt.slice(0, 500)}`,
-      );
-    }
+      method,
+    );
+    this.clearCache();
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     if (!text) return undefined as T;

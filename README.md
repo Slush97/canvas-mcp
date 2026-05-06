@@ -136,12 +136,17 @@ Canvas's surface area varies between schools. Quirks observed at one institution
 
 The tools fail loudly with the underlying Canvas error message — no silent degradations except the `course_files` fallback.
 
+## Behavior notes
+
+- **GET cache.** Single-shot `get` calls (not `paginate`) are cached in-memory for 60 seconds, keyed by full URL with query. Helps the burst pattern that composites like `weekly_digest` and `course_dashboard` produce. Any write tool clears the cache. Set `CANVAS_NO_CACHE=1` in the env to disable.
+- **Rate-limit retry.** A `429` or a `403` whose body contains a rate-limit signal triggers a single 2-second retry. If it still fails, the original Canvas error is surfaced.
+
 ## Skills
 
 Workflow recipes that turn multi-tool calls into a single command. See [`skills/`](skills/README.md) for the full list and install instructions.
 
 - **`canvas-week-plan`** — Sunday-night ritual. Overdue first, then this-week-by-day, then graded work and announcements. Built around `weekly_digest` + `assignment_status`.
-- **`canvas-catch-up`** — what changed since a moment in time (default: 24h ago). New grades, announcements, messages, assignments. Built around `what_changed_since`.
+- **`canvas-catch-up`** — what changed since a moment in time (default: 24h ago). New grades, announcements, messages, assignments. Built around `catch_up`, which persists a last-seen marker locally so the common case is zero-arg.
 - **`canvas-submit-assignment`** — preview-then-confirm gate around the `submit_assignment_*` write tools. Refuses on type mismatch, warns on past-`lock_at`, verifies via `submission_history` after.
 
 ## Security

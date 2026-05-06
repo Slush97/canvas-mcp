@@ -2,6 +2,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { readFile, stat } from "node:fs/promises";
+import { basename } from "node:path";
 import { CanvasClient } from "./canvas.js";
 import { htmlToText, daysAgoIso, daysFromNowIso } from "./util.js";
 
@@ -45,16 +47,28 @@ server.registerTool(
   },
   async ({ enrollment_state, include }) => {
     const courses = await canvas.paginate<any>("/courses", { enrollment_state, include });
+    const want = new Set(include ?? []);
     return json(
-      courses.map((c) => ({
-        id: c.id,
-        name: c.name,
-        course_code: c.course_code,
-        term: c.term?.name,
-        workflow_state: c.workflow_state,
-        start_at: c.start_at,
-        end_at: c.end_at,
-      }))
+      courses.map((c) => {
+        const out: Record<string, unknown> = {
+          id: c.id,
+          name: c.name,
+          course_code: c.course_code,
+          term: c.term?.name,
+          workflow_state: c.workflow_state,
+          start_at: c.start_at,
+          end_at: c.end_at,
+        };
+        if (want.has("teachers")) {
+          out.teachers = (c.teachers ?? []).map((t: any) => ({
+            id: t.id,
+            name: t.display_name ?? t.name,
+          }));
+        }
+        if (want.has("total_students")) out.total_students = c.total_students;
+        if (want.has("syllabus_body")) out.syllabus = htmlToText(c.syllabus_body, 4000);
+        return out;
+      })
     );
   }
 );
@@ -167,7 +181,7 @@ server.registerTool(
         context_code: a.context_code,
         author: a.author?.display_name,
         url: a.html_url,
-        message: a.message,
+        message: htmlToText(a.message, 4000),
       }))
     );
   }
@@ -176,7 +190,8 @@ server.registerTool(
 server.registerTool(
   "list_calendar_events",
   {
-    description: "List calendar events (or assignments) within a date range.",
+    description:
+      "List calendar events (or assignments) within a date range. If context_codes is omitted, defaults to all of the user's active courses (Canvas's default of 'user's own contexts' typically returns nothing for students).",
     inputSchema: {
       start_date: z.string().describe("ISO date inclusive."),
       end_date: z.string().describe("ISO date inclusive."),
@@ -184,15 +199,21 @@ server.registerTool(
       context_codes: z
         .array(z.string())
         .optional()
-        .describe('e.g. ["course_123","user_456"]. Defaults to the user\'s own contexts.'),
+        .describe('e.g. ["course_123","user_456"]. Defaults to all active courses.'),
     },
   },
   async ({ start_date, end_date, type, context_codes }) => {
+    let codes = context_codes;
+    if (!codes || codes.length === 0) {
+      const courses = await canvas.paginate<any>("/courses", { enrollment_state: "active" });
+      codes = courses.filter((c) => c.id).map((c) => `course_${c.id}`);
+      if (type === "event") codes.push("user_self");
+    }
     const events = await canvas.paginate<any>("/calendar_events", {
       start_date,
       end_date,
       type,
-      context_codes,
+      context_codes: codes,
     });
     return json(
       events.map((e) => ({
@@ -211,16 +232,51 @@ server.registerTool(
 server.registerTool(
   "list_modules",
   {
-    description: "List modules in a course, optionally including their items.",
+    description:
+      "List modules in a course, optionally including their items. Pass module_id to fetch a single module's items (avoids huge dumps for content-heavy courses).",
     inputSchema: {
       course_id: z.number().int(),
       include_items: z.boolean().default(false),
+      module_id: z
+        .number()
+        .int()
+        .optional()
+        .describe("If set, return only this module (with items if include_items)."),
     },
   },
-  async ({ course_id, include_items }) => {
-    const modules = await canvas.paginate<any>(`/courses/${course_id}/modules`, {
-      include: include_items ? ["items"] : undefined,
-    });
+  async ({ course_id, include_items, module_id }) => {
+    const include = include_items ? ["items"] : undefined;
+    if (module_id != null) {
+      const m = await canvas.get<any>(
+        `/courses/${course_id}/modules/${module_id}`,
+        include ? { include } : undefined
+      );
+      const items =
+        include_items && !m.items
+          ? await canvas.paginate<any>(`/courses/${course_id}/modules/${module_id}/items`)
+          : m.items;
+      return json([
+        {
+          id: m.id,
+          name: m.name,
+          position: m.position,
+          state: m.state,
+          items_count: m.items_count,
+          unlock_at: m.unlock_at,
+          items: items?.map((it: any) => ({
+            id: it.id,
+            type: it.type,
+            title: it.title,
+            position: it.position,
+            indent: it.indent,
+            html_url: it.html_url,
+            url: it.url,
+            completion_requirement: it.completion_requirement,
+          })),
+        },
+      ]);
+    }
+    const modules = await canvas.paginate<any>(`/courses/${course_id}/modules`, { include });
     return json(
       modules.map((m) => ({
         id: m.id,
@@ -475,10 +531,23 @@ server.registerTool(
       submission_type: s.submission_type,
       preview_url: s.preview_url,
       html_url: s.html_url,
+      attachments: (s.attachments ?? []).map((a: any) => ({
+        id: a.id,
+        display_name: a.display_name,
+        filename: a.filename,
+        size: a.size,
+        content_type: a["content-type"],
+        url: a.url,
+      })),
       comments: (s.submission_comments ?? []).map((c: any) => ({
         author: c.author_name,
         created_at: c.created_at,
         comment: htmlToText(c.comment, 2000),
+        attachments: (c.attachments ?? []).map((a: any) => ({
+          filename: a.filename,
+          display_name: a.display_name,
+          url: a.url,
+        })),
       })),
       rubric_assessment: s.rubric_assessment
         ? Object.entries(s.rubric_assessment).map(([crit_id, v]: [string, any]) => ({
@@ -582,23 +651,40 @@ server.registerTool(
         .array(z.string())
         .optional()
         .describe('Filter by context, e.g. ["course_46061"].'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .default(25)
+        .describe("Max conversations to return (most recent first). Default 25."),
     },
   },
-  async ({ scope, filter }) => {
+  async ({ scope, filter, limit }) => {
     const convos = await canvas.paginate<any>("/conversations", { scope, filter });
-    return json(
-      convos.map((c) => ({
-        id: c.id,
-        subject: c.subject,
-        last_message_at: c.last_message_at,
-        last_message: htmlToText(c.last_message, 300),
-        message_count: c.message_count,
-        workflow_state: c.workflow_state,
-        starred: c.starred,
-        participants: (c.participants ?? []).map((p: any) => p.full_name ?? p.name),
-        context_name: c.context_name,
-      }))
-    );
+    const trimmed = convos.slice(0, limit);
+    return json({
+      total: convos.length,
+      returned: trimmed.length,
+      conversations: trimmed.map((c) => {
+        const participants = (c.participants ?? []).map((p: any) => p.full_name ?? p.name);
+        return {
+          id: c.id,
+          subject: c.subject,
+          last_message_at: c.last_message_at,
+          last_message: htmlToText(c.last_message, 300),
+          message_count: c.message_count,
+          workflow_state: c.workflow_state,
+          starred: c.starred,
+          participants:
+            participants.length > 6
+              ? [...participants.slice(0, 5), `…and ${participants.length - 5} others`]
+              : participants,
+          participant_count: participants.length,
+          context_name: c.context_name,
+        };
+      }),
+    });
   }
 );
 
@@ -721,25 +807,48 @@ server.registerTool(
 server.registerTool(
   "list_pages",
   {
-    description: "List wiki pages in a course.",
+    description:
+      "List wiki pages in a course. If the institution disables the pages index (404), falls back to scanning module items for Page-type entries.",
     inputSchema: {
       course_id: z.number().int(),
       search_term: z.string().min(3).optional(),
     },
   },
   async ({ course_id, search_term }) => {
-    const pages = await canvas.paginate<any>(`/courses/${course_id}/pages`, { search_term });
-    return json(
-      pages.map((p) => ({
-        url: p.url,
-        title: p.title,
-        published: p.published,
-        front_page: p.front_page,
-        created_at: p.created_at,
-        updated_at: p.updated_at,
-        html_url: p.html_url,
-      }))
-    );
+    try {
+      const pages = await canvas.paginate<any>(`/courses/${course_id}/pages`, { search_term });
+      return json(
+        pages.map((p) => ({
+          source: "pages" as const,
+          url: p.url,
+          title: p.title,
+          published: p.published,
+          front_page: p.front_page,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          html_url: p.html_url,
+        }))
+      );
+    } catch (e) {
+      if (!/^Canvas API 40[34]/.test(String((e as Error).message))) throw e;
+      const modules = await canvas.paginate<any>(`/courses/${course_id}/modules`, {
+        include: ["items"],
+      });
+      const needle = search_term?.toLowerCase();
+      const items = modules.flatMap((m: any) =>
+        (m.items ?? [])
+          .filter((it: any) => it.type === "Page")
+          .filter((it: any) => !needle || (it.title ?? "").toLowerCase().includes(needle))
+          .map((it: any) => ({
+            source: "modules" as const,
+            url: typeof it.url === "string" ? it.url.split("/pages/").pop() ?? null : null,
+            title: it.title,
+            module: m.name,
+            html_url: it.html_url,
+          }))
+      );
+      return json(items);
+    }
   }
 );
 
@@ -1023,6 +1132,173 @@ server.registerTool(
   }
 );
 
+// ─── People, groups, activity ────────────────────────────────────────────────
+
+server.registerTool(
+  "course_roster",
+  {
+    description:
+      "List users enrolled in a course (id, name, role). Use the resulting ids with send_message recipients.",
+    inputSchema: {
+      course_id: z.number().int(),
+      enrollment_type: z
+        .enum(["teacher", "student", "ta", "observer", "designer"])
+        .optional()
+        .describe("Filter by role."),
+      search_term: z
+        .string()
+        .min(2)
+        .optional()
+        .describe("Filter by name substring (Canvas requires >=2 chars)."),
+    },
+  },
+  async ({ course_id, enrollment_type, search_term }) => {
+    const users = await canvas.paginate<any>(`/courses/${course_id}/users`, {
+      enrollment_type,
+      search_term,
+      include: ["enrollments"],
+    });
+    return json(
+      users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        sortable_name: u.sortable_name,
+        email: u.email,
+        roles: (u.enrollments ?? []).map((e: any) => e.type),
+      }))
+    );
+  }
+);
+
+server.registerTool(
+  "search_recipients",
+  {
+    description:
+      "Search Canvas for message recipients across all the user's contexts. Returns users and groups with ids usable in send_message.",
+    inputSchema: {
+      search: z.string().min(1).describe("Name fragment to search for."),
+      context: z
+        .string()
+        .optional()
+        .describe('Limit to a context, e.g. "course_46061" or "course_46061_students".'),
+      type: z
+        .enum(["user", "context"])
+        .optional()
+        .describe('"user" for people, "context" for courses/groups.'),
+    },
+  },
+  async ({ search, context, type }) => {
+    const results = await canvas.get<any[]>("/search/recipients", { search, context, type });
+    return json(
+      (results ?? []).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        type: r.type ?? (typeof r.id === "string" ? "context" : "user"),
+        common_courses: r.common_courses,
+        user_count: r.user_count,
+      }))
+    );
+  }
+);
+
+server.registerTool(
+  "course_groups",
+  {
+    description: "List groups within a course. Useful for group-project students.",
+    inputSchema: { course_id: z.number().int() },
+  },
+  async ({ course_id }) => {
+    const groups = await canvas.paginate<any>(`/courses/${course_id}/groups`);
+    return json(
+      groups.map((g) => ({
+        id: g.id,
+        name: g.name,
+        description: htmlToText(g.description, 500),
+        members_count: g.members_count,
+        max_membership: g.max_membership,
+        group_category_id: g.group_category_id,
+        is_public: g.is_public,
+        join_level: g.join_level,
+      }))
+    );
+  }
+);
+
+server.registerTool(
+  "activity_stream",
+  {
+    description:
+      "The user's Canvas activity stream — the same notifications shown in the global header (announcements, conversations, submissions, grading, etc.).",
+    inputSchema: {
+      only_active: z
+        .boolean()
+        .default(false)
+        .describe("If true, drop items the user has already read."),
+    },
+  },
+  async ({ only_active }) => {
+    const items = await canvas.get<any[]>("/users/self/activity_stream");
+    const filtered = only_active ? (items ?? []).filter((i: any) => !i.read_state) : items ?? [];
+    return json(
+      filtered.map((i: any) => ({
+        id: i.id,
+        type: i.type,
+        title: i.title,
+        message: htmlToText(i.message, 800),
+        course_id: i.course_id,
+        context_type: i.context_type,
+        read_state: i.read_state,
+        created_at: i.created_at,
+        updated_at: i.updated_at,
+        url: i.html_url,
+      }))
+    );
+  }
+);
+
+server.registerTool(
+  "submission_history",
+  {
+    description:
+      "All attempts the user has made on an assignment (submission_feedback returns only the latest).",
+    inputSchema: {
+      course_id: z.number().int(),
+      assignment_id: z.number().int(),
+    },
+  },
+  async ({ course_id, assignment_id }) => {
+    const s = await canvas.get<any>(
+      `/courses/${course_id}/assignments/${assignment_id}/submissions/self`,
+      { include: ["submission_history"] }
+    );
+    const attempts = s.submission_history ?? [];
+    return json(
+      attempts.map((a: any) => ({
+        attempt: a.attempt,
+        submitted_at: a.submitted_at,
+        graded_at: a.graded_at,
+        score: a.score,
+        grade: a.grade,
+        late: a.late,
+        missing: a.missing,
+        excused: a.excused,
+        workflow_state: a.workflow_state,
+        submission_type: a.submission_type,
+        body: a.body ? htmlToText(a.body, 2000) : undefined,
+        url: a.url,
+        preview_url: a.preview_url,
+        attachments: (a.attachments ?? []).map((f: any) => ({
+          id: f.id,
+          filename: f.filename,
+          display_name: f.display_name,
+          size: f.size,
+          url: f.url,
+        })),
+      }))
+    );
+  }
+);
+
 // ─── Writes ──────────────────────────────────────────────────────────────────
 
 server.registerTool(
@@ -1064,17 +1340,36 @@ server.registerTool(
 server.registerTool(
   "mark_conversation",
   {
-    description: "Mark a conversation as read or unread.",
+    description:
+      "Update a conversation: set state (read/unread/archived) and/or starred. At least one must be provided.",
     inputSchema: {
       conversation_id: z.number().int(),
-      state: z.enum(["read", "unread"]).default("read"),
+      state: z
+        .enum(["read", "unread", "archived"])
+        .optional()
+        .describe("Workflow state. Omit to leave unchanged."),
+      starred: z
+        .boolean()
+        .optional()
+        .describe("Star/unstar. Omit to leave unchanged."),
     },
   },
-  async ({ conversation_id, state }) => {
-    const data = await canvas.put<any>(`/conversations/${conversation_id}`, {
-      conversation: { workflow_state: state },
+  async ({ conversation_id, state, starred }) => {
+    if (state === undefined && starred === undefined) {
+      return {
+        content: [{ type: "text" as const, text: "must set state or starred" }],
+        isError: true,
+      };
+    }
+    const conversation: Record<string, unknown> = {};
+    if (state !== undefined) conversation.workflow_state = state;
+    if (starred !== undefined) conversation.starred = starred;
+    const data = await canvas.put<any>(`/conversations/${conversation_id}`, { conversation });
+    return json({
+      id: data.id,
+      workflow_state: data.workflow_state,
+      starred: data.starred,
     });
-    return json({ id: data.id, workflow_state: data.workflow_state });
   }
 );
 
@@ -1169,6 +1464,133 @@ server.registerTool(
       submitted_at: s.submitted_at,
       workflow_state: s.workflow_state,
       url: s.url,
+      preview_url: s.preview_url,
+    });
+  }
+);
+
+server.registerTool(
+  "add_submission_comment",
+  {
+    description:
+      "Add a comment to the user's own submission for an assignment (e.g., reply to grader feedback). Does not create a new submission.",
+    inputSchema: {
+      course_id: z.number().int(),
+      assignment_id: z.number().int(),
+      text: z.string().min(1),
+    },
+  },
+  async ({ course_id, assignment_id, text }) => {
+    const s = await canvas.put<any>(
+      `/courses/${course_id}/assignments/${assignment_id}/submissions/self`,
+      { comment: { text_comment: text } }
+    );
+    const comments = s.submission_comments ?? [];
+    const last = comments[comments.length - 1];
+    return json({
+      assignment_id: s.assignment_id,
+      comment_count: comments.length,
+      last_comment: last
+        ? {
+            author: last.author_name,
+            created_at: last.created_at,
+            comment: htmlToText(last.comment, 1000),
+          }
+        : undefined,
+    });
+  }
+);
+
+server.registerTool(
+  "submit_assignment_file",
+  {
+    description:
+      "Submit an assignment as online_upload by uploading one or more local files. Three-step Canvas flow (init → upload → submit). Verify the assignment accepts online_upload via assignment_details first.",
+    inputSchema: {
+      course_id: z.number().int(),
+      assignment_id: z.number().int(),
+      file_paths: z
+        .array(z.string().min(1))
+        .min(1)
+        .max(10)
+        .describe("Absolute paths to files to upload."),
+      content_types: z
+        .array(z.string())
+        .optional()
+        .describe("Optional MIME types, parallel to file_paths."),
+    },
+  },
+  async ({ course_id, assignment_id, file_paths, content_types }) => {
+    const fileIds: number[] = [];
+    for (let i = 0; i < file_paths.length; i++) {
+      const path = file_paths[i];
+      const ct = content_types?.[i];
+      const size = (await stat(path)).size;
+      const name = basename(path);
+
+      const init = await canvas.post<any>(
+        `/courses/${course_id}/assignments/${assignment_id}/submissions/self/files`,
+        { name, size, content_type: ct }
+      );
+      if (!init.upload_url || !init.upload_params) {
+        throw new Error(
+          `Canvas upload init returned no upload_url for ${name}: ${JSON.stringify(init).slice(0, 300)}`
+        );
+      }
+
+      const form = new FormData();
+      for (const [k, v] of Object.entries(init.upload_params)) {
+        form.append(k, String(v));
+      }
+      const buf = await readFile(path);
+      form.append("file", new Blob([new Uint8Array(buf)]), name);
+
+      const up = await fetch(init.upload_url, {
+        method: "POST",
+        body: form,
+        redirect: "manual",
+      });
+
+      let fileId: number | undefined;
+      if (up.status >= 300 && up.status < 400) {
+        const location = up.headers.get("location") ?? up.headers.get("Location");
+        if (!location) throw new Error(`Upload redirect with no Location for ${name}`);
+        const confirm = await fetch(location, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Length": "0",
+          },
+        });
+        if (!confirm.ok) {
+          const t = await confirm.text();
+          throw new Error(`File confirm failed for ${name}: ${confirm.status} ${t.slice(0, 300)}`);
+        }
+        const fileData = await confirm.json();
+        fileId = fileData.id;
+      } else if (up.ok) {
+        const fileData = await up.json();
+        fileId = fileData.id;
+      } else {
+        const t = await up.text();
+        throw new Error(`Upload failed for ${name}: ${up.status} ${t.slice(0, 300)}`);
+      }
+      if (typeof fileId !== "number") {
+        throw new Error(`Upload for ${name} did not return a file id`);
+      }
+      fileIds.push(fileId);
+    }
+
+    const s = await canvas.post<any>(
+      `/courses/${course_id}/assignments/${assignment_id}/submissions`,
+      { submission: { submission_type: "online_upload", file_ids: fileIds } }
+    );
+    return json({
+      id: s.id,
+      attempt: s.attempt,
+      submitted_at: s.submitted_at,
+      workflow_state: s.workflow_state,
+      file_ids: fileIds,
       preview_url: s.preview_url,
     });
   }

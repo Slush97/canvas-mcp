@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - MIT `LICENSE`.
 - `CHANGELOG.md` (this file).
+- Vitest unit tests for `htmlToText`, the `daysAgoIso` / `daysFromNowIso`
+  helpers, and the `CanvasClient` (URL building, query encoding, error
+  wrapping, Link-header pagination). 28 tests, no live Canvas required.
+- `parseNextLink` is now exported from `src/canvas.ts` so its
+  Link-header parsing can be exercised in isolation.
 
 ## [0.1.0] — 2026-05-05
 

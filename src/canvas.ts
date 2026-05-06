@@ -108,7 +108,7 @@ export class CanvasClient {
   }
 }
 
-function parseNextLink(header: string | null): string | null {
+export function parseNextLink(header: string | null): string | null {
   if (!header) return null;
   for (const part of header.split(",")) {
     const match = part.trim().match(/^<([^>]+)>;\s*rel="next"$/);

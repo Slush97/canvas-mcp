@@ -15,9 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrapping, Link-header pagination). 28 tests, no live Canvas required.
 - `parseNextLink` is now exported from `src/canvas.ts` so its
   Link-header parsing can be exercised in isolation.
-- GitHub Actions CI: typecheck + build + test on Node 20 and 22.
+- GitHub Actions CI: typecheck + build + test on Node 20 and 22, plus
+  `prettier --check`.
 - Prettier config (`.prettierrc.json`, `.prettierignore`) and
   `format` / `format:check` npm scripts. Existing source reformatted.
+- `CLAUDE.md` repo guide for AI agents.
+- Dependabot config (weekly npm grouped by dev/prod, monthly Actions).
+- Two skills under `skills/`:
+  - **`canvas-week-plan`** — prioritized weekly plan from `weekly_digest`
+    + per-course `assignment_status`.
+  - **`canvas-catch-up`** — diff since a moment, built around
+    `what_changed_since` with an `activity_stream` cross-check.
 
 ## [0.1.0] — 2026-05-05
 

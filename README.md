@@ -134,6 +134,13 @@ Canvas's surface area varies between schools. Quirks observed at one institution
 
 The tools fail loudly with the underlying Canvas error message — no silent degradations except the `course_files` fallback.
 
+## Skills
+
+Workflow recipes that turn multi-tool calls into a single command. See [`skills/`](skills/README.md) for the full list and install instructions.
+
+- **`canvas-week-plan`** — Sunday-night ritual. Overdue first, then this-week-by-day, then graded work and announcements. Built around `weekly_digest` + `assignment_status`.
+- **`canvas-catch-up`** — what changed since a moment in time (default: 24h ago). New grades, announcements, messages, assignments. Built around `what_changed_since`.
+
 ## Security
 
 - The token grants the server your full Canvas permissions as a student. Treat it like a password.
@@ -144,9 +151,12 @@ The tools fail loudly with the underlying Canvas error message — no silent deg
 ## Development
 
 ```sh
-npm run build      # tsc to dist/
-npm run dev        # tsx watch mode
-npm run typecheck  # tsc --noEmit
+npm run build         # tsc to dist/
+npm run dev           # tsx watch mode
+npm run typecheck     # tsc --noEmit
+npm test              # vitest run
+npm run format        # prettier --write .
+npm run format:check  # prettier --check . (what CI runs)
 ```
 
 The protocol is JSON-RPC over stdio. To exercise a tool manually, pipe an `initialize`, then `notifications/initialized`, then `tools/call` frame into `node dist/index.js`.

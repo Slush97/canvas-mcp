@@ -79,7 +79,8 @@ CI (`.github/workflows/ci.yml`) runs `format:check`, `typecheck`, `build`, and
   audience, much larger surface, scope creep.
 - No FERPA anonymization. Student tools only access the calling user's own
   data.
-- No agent skills layer yet. Planned but not landed.
+- Skills under `skills/` are workflow recipes (markdown), not a runtime
+  framework. They compose existing tools; they don't add new capabilities.
 
 If you're tempted to add any of the above, talk to the maintainer first —
 those are scope decisions, not implementation details.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-06
+
 ### Added
 - MIT `LICENSE`.
 - `CHANGELOG.md` (this file).
@@ -66,5 +68,6 @@ tools are tagged `(write)` in the README; there is no undo for them.
   `type` to `assignment`, since Canvas's own defaults return nothing useful
   at many institutions.
 
-[Unreleased]: https://github.com/Slush97/canvas-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Slush97/canvas-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Slush97/canvas-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Slush97/canvas-mcp/releases/tag/v0.1.0

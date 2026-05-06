@@ -42,3 +42,35 @@ export function daysAgoIso(days: number): string {
 export function daysFromNowIso(days: number): string {
   return new Date(Date.now() + days * 86400000).toISOString();
 }
+
+export type ExtractedText = { text: string | null; error?: string };
+
+export async function extractText(data: Uint8Array, contentType: string): Promise<ExtractedText> {
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("pdf")) {
+    try {
+      const { extractText: pdfExtract } = await import("unpdf");
+      const result = await pdfExtract(data, { mergePages: true });
+      const text = Array.isArray(result.text) ? result.text.join("\n\n") : (result.text as string);
+      return { text };
+    } catch (e) {
+      return {
+        text: null,
+        error: `PDF parse failed (may be encrypted or malformed): ${(e as Error).message}`,
+      };
+    }
+  }
+  if (ct.includes("officedocument.wordprocessingml") || ct.includes("application/msword")) {
+    try {
+      const mammoth = await import("mammoth");
+      const result = await mammoth.extractRawText({ buffer: Buffer.from(data) });
+      return { text: result.value };
+    } catch (e) {
+      return { text: null, error: `DOCX parse failed: ${(e as Error).message}` };
+    }
+  }
+  if (ct.startsWith("text/") || ct.includes("json") || ct.includes("xml")) {
+    return { text: new TextDecoder("utf-8", { fatal: false }).decode(data) };
+  }
+  return { text: null, error: `unsupported content type: ${contentType || "unknown"}` };
+}

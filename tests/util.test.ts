@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { daysAgoIso, daysFromNowIso, htmlToText } from "../src/util.js";
+import { daysAgoIso, daysFromNowIso, extractText, htmlToText } from "../src/util.js";
 
 describe("htmlToText", () => {
   it("returns empty string for null/undefined/empty", () => {
@@ -88,5 +88,57 @@ describe("daysAgoIso / daysFromNowIso", () => {
   it("zero returns now", () => {
     expect(daysAgoIso(0)).toBe("2026-05-05T12:00:00.000Z");
     expect(daysFromNowIso(0)).toBe("2026-05-05T12:00:00.000Z");
+  });
+});
+
+describe("extractText", () => {
+  const encode = (s: string) => new TextEncoder().encode(s);
+
+  it("decodes text/plain as UTF-8", async () => {
+    const result = await extractText(encode("hello world"), "text/plain; charset=utf-8");
+    expect(result.text).toBe("hello world");
+    expect(result.error).toBeUndefined();
+  });
+
+  it("decodes text/markdown", async () => {
+    const result = await extractText(encode("# title\nbody"), "text/markdown");
+    expect(result.text).toBe("# title\nbody");
+  });
+
+  it("decodes application/json", async () => {
+    const result = await extractText(encode('{"a":1}'), "application/json");
+    expect(result.text).toBe('{"a":1}');
+  });
+
+  it("decodes application/xml", async () => {
+    const result = await extractText(encode("<a/>"), "application/xml");
+    expect(result.text).toBe("<a/>");
+  });
+
+  it("returns null + error for unsupported binary types", async () => {
+    const result = await extractText(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), "image/png");
+    expect(result.text).toBeNull();
+    expect(result.error).toMatch(/unsupported content type: image\/png/);
+  });
+
+  it("returns null + error for empty content type", async () => {
+    const result = await extractText(new Uint8Array([1, 2, 3]), "");
+    expect(result.text).toBeNull();
+    expect(result.error).toMatch(/unsupported content type: unknown/);
+  });
+
+  it("returns error when PDF parsing fails on garbage bytes", async () => {
+    const result = await extractText(encode("not a real pdf"), "application/pdf");
+    expect(result.text).toBeNull();
+    expect(result.error).toMatch(/PDF parse failed/);
+  });
+
+  it("returns error when DOCX parsing fails on garbage bytes", async () => {
+    const result = await extractText(
+      encode("not a real docx"),
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    );
+    expect(result.text).toBeNull();
+    expect(result.error).toMatch(/DOCX parse failed/);
   });
 });

@@ -56,7 +56,7 @@ Built for students. Drop it into your Claude Code config and ask things like:
 
 ## Tools
 
-38 tools, all return JSON. Tools marked _(write)_ mutate Canvas state — there's no undo.
+39 tools, all return JSON. Tools marked _(write)_ mutate Canvas state — there's no undo.
 
 ### Identity and courses
 
@@ -113,6 +113,7 @@ Built for students. Drop it into your Claude Code config and ask things like:
 
 - `list_modules(course_id, include_items=false, module_id?)` — modules with optional item listing. `module_id` returns just one module (avoids huge dumps).
 - `course_files(course_id, search_term?, content_types?)` — direct files API; falls back to scanning module items for File-type entries if the institution restricts the bulk endpoint.
+- `read_file(file_id, max_chars=200000)` — download a Canvas file and extract its text. PDFs via unpdf, DOCX via mammoth, text/json/xml decoded as UTF-8. Images, archives, and other binaries return metadata only. Files >50MB are not downloaded.
 - `list_pages(course_id, search_term?)` — wiki pages; falls back to scanning module items for Page-type entries on 404.
 - `read_page(course_id, page_url)` — page body, HTML stripped.
 

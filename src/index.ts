@@ -5,7 +5,9 @@ import { z } from "zod";
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { CanvasClient } from "./canvas.js";
-import { htmlToText, daysAgoIso, daysFromNowIso } from "./util.js";
+import { htmlToText, daysAgoIso, daysFromNowIso, extractText } from "./util.js";
+
+const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
 const baseUrl = process.env.CANVAS_BASE_URL;
 const token = process.env.CANVAS_TOKEN;
@@ -456,6 +458,80 @@ server.registerTool(
       );
       return json(items);
     }
+  },
+);
+
+server.registerTool(
+  "read_file",
+  {
+    description:
+      "Download a Canvas file by id and extract its text. PDFs go through unpdf, DOCX through mammoth, text/json/xml are decoded as UTF-8. Images, archives, and other binaries return metadata only with no text. Files larger than 50MB are not downloaded.",
+    inputSchema: {
+      file_id: z.number().int(),
+      max_chars: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe("Truncate extracted text to this many characters. Defaults to 200000."),
+    },
+  },
+  async ({ file_id, max_chars }) => {
+    const limit = max_chars ?? 200_000;
+    const meta = await canvas.get<any>(`/files/${file_id}`);
+    const url = (meta.url ?? null) as string | null;
+    const contentType = String(meta["content-type"] ?? "application/octet-stream");
+    const size = Number(meta.size ?? 0);
+    const name = String(meta.display_name ?? meta.filename ?? `file-${file_id}`);
+
+    const out: {
+      id: number;
+      name: string;
+      content_type: string;
+      size: number;
+      url: string | null;
+      text: string | null;
+      truncated: boolean;
+      error?: string;
+    } = {
+      id: meta.id ?? file_id,
+      name,
+      content_type: contentType,
+      size,
+      url,
+      text: null,
+      truncated: false,
+    };
+
+    if (meta.locked_for_user || meta.locked || !url) {
+      out.error = meta.lock_explanation ?? "file is locked or has no download URL";
+      return json(out);
+    }
+    if (size > MAX_DOWNLOAD_BYTES) {
+      out.error = `file too large to download (${size} bytes > ${MAX_DOWNLOAD_BYTES})`;
+      return json(out);
+    }
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(
+        `File download ${res.status} ${res.statusText} for ${url}: ${body.slice(0, 500)}`,
+      );
+    }
+    const buf = new Uint8Array(await res.arrayBuffer());
+    const { text, error } = await extractText(buf, contentType);
+    if (text == null) {
+      out.error = error;
+      return json(out);
+    }
+    if (text.length > limit) {
+      out.text = text.slice(0, limit);
+      out.truncated = true;
+    } else {
+      out.text = text;
+    }
+    return json(out);
   },
 );
 

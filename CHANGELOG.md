@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `read_file(file_id, max_chars?=200_000)` — download a Canvas file by id and
+  extract its text. PDFs go through `unpdf`, DOCX through `mammoth`, and
+  text/json/xml are decoded as UTF-8. Images, archives, and other binaries
+  return metadata only with no text. Files larger than 50MB are not
+  downloaded. Locked files return an `error` describing the lock.
+- `extractText(data, contentType)` helper exported from `src/util.ts` so the
+  content-type dispatch is unit-testable in isolation.
+- New runtime dependencies: `unpdf` (PDF text extraction) and `mammoth`
+  (DOCX text extraction). Loaded via dynamic `import()` so they only count
+  against startup when `read_file` is actually called.
+
 ## [0.2.0] — 2026-05-06
 
 ### Added
@@ -69,5 +81,6 @@ tools are tagged `(write)` in the README; there is no undo for them.
   at many institutions.
 
 [Unreleased]: https://github.com/Slush97/canvas-mcp/compare/v0.2.0...HEAD
+
 [0.2.0]: https://github.com/Slush97/canvas-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Slush97/canvas-mcp/releases/tag/v0.1.0

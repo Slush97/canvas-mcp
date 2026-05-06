@@ -6,6 +6,7 @@ import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { CanvasClient } from "./canvas.js";
 import { htmlToText, daysAgoIso, daysFromNowIso, extractText } from "./util.js";
+import { getLastSeen, loadState, saveState, setLastSeen } from "./state.js";
 
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -23,6 +24,103 @@ const server = new McpServer({ name: "canvas-mcp", version: "0.1.0" });
 const json = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
 });
+
+interface ChangeDiff {
+  since: string;
+  new_announcements: Array<{ course: string; title: string; posted_at: string; url: string }>;
+  new_assignments: Array<{
+    course: string;
+    name: string;
+    due_at: string | null;
+    points_possible: number | null;
+    html_url: string;
+  }>;
+  newly_graded: Array<{
+    course: string;
+    assignment: string;
+    score: number;
+    points_possible: number | null;
+    graded_at: string | null;
+    posted_at: string | null;
+    html_url: string;
+  }>;
+}
+
+async function computeChangedSince(since: string, only_course_id?: number): Promise<ChangeDiff> {
+  const sinceMs = Date.parse(since);
+  if (Number.isNaN(sinceMs)) {
+    throw new Error(`invalid ISO timestamp: ${since}`);
+  }
+  let real: any[];
+  if (only_course_id != null) {
+    const c = await canvas.get<any>(`/courses/${only_course_id}`);
+    real = c?.id ? [c] : [];
+  } else {
+    const courses = await canvas.paginate<any>("/courses", { enrollment_state: "active" });
+    real = courses.filter((c) => c.id);
+  }
+  const courseIds = real.map((c) => c.id);
+  const courseLookup = new Map<number, string>(real.map((c) => [c.id, c.course_code ?? c.name]));
+
+  const [announcements, perCourseAssignments] = await Promise.all([
+    courseIds.length
+      ? canvas.paginate<any>("/announcements", {
+          context_codes: courseIds.map((id) => `course_${id}`),
+          start_date: since,
+        })
+      : Promise.resolve([]),
+    Promise.all(
+      courseIds.map((id) =>
+        canvas.paginate<any>(`/courses/${id}/assignments`, { include: ["submission"] }),
+      ),
+    ),
+  ]);
+
+  const new_announcements = announcements
+    .filter((a: any) => Date.parse(a.posted_at) >= sinceMs)
+    .map((a: any) => {
+      const cid = Number(String(a.context_code).split("_")[1]);
+      return {
+        course: courseLookup.get(cid) ?? a.context_code,
+        title: a.title,
+        posted_at: a.posted_at,
+        url: a.html_url,
+      };
+    });
+
+  const new_assignments: ChangeDiff["new_assignments"] = [];
+  const newly_graded: ChangeDiff["newly_graded"] = [];
+  for (let i = 0; i < courseIds.length; i++) {
+    const course = courseLookup.get(courseIds[i]) ?? `course_${courseIds[i]}`;
+    for (const a of perCourseAssignments[i]) {
+      if (a.created_at && Date.parse(a.created_at) >= sinceMs) {
+        new_assignments.push({
+          course,
+          name: a.name,
+          due_at: a.due_at,
+          points_possible: a.points_possible,
+          html_url: a.html_url,
+        });
+      }
+      const s = a.submission;
+      const gradedAt = s?.graded_at ? Date.parse(s.graded_at) : 0;
+      const postedAt = s?.posted_at ? Date.parse(s.posted_at) : 0;
+      if (Math.max(gradedAt, postedAt) >= sinceMs && s?.score != null) {
+        newly_graded.push({
+          course,
+          assignment: a.name,
+          score: s.score,
+          points_possible: a.points_possible,
+          graded_at: s.graded_at,
+          posted_at: s.posted_at,
+          html_url: a.html_url,
+        });
+      }
+    }
+  }
+
+  return { since, new_announcements, new_assignments, newly_graded };
+}
 
 server.registerTool(
   "whoami",
@@ -1122,80 +1220,74 @@ server.registerTool(
     },
   },
   async ({ since }) => {
-    const sinceMs = Date.parse(since);
-    if (Number.isNaN(sinceMs)) {
+    if (Number.isNaN(Date.parse(since))) {
       return {
         content: [{ type: "text" as const, text: `invalid ISO timestamp: ${since}` }],
         isError: true,
       };
     }
-    const courses = await canvas.paginate<any>("/courses", { enrollment_state: "active" });
-    const real = courses.filter((c) => c.id);
-    const courseIds = real.map((c) => c.id);
-    const courseLookup = new Map<number, string>(real.map((c) => [c.id, c.course_code ?? c.name]));
+    return json(await computeChangedSince(since));
+  },
+);
 
-    const [announcements, perCourseAssignments] = await Promise.all([
-      courseIds.length
-        ? canvas.paginate<any>("/announcements", {
-            context_codes: courseIds.map((id) => `course_${id}`),
-            start_date: since,
-          })
-        : Promise.resolve([]),
-      Promise.all(
-        courseIds.map((id) =>
-          canvas.paginate<any>(`/courses/${id}/assignments`, { include: ["submission"] }),
+server.registerTool(
+  "catch_up",
+  {
+    description:
+      "What's new since you last checked. Reads a stored last-seen marker from local state, calls what_changed_since with that timestamp, then advances the marker. On the first call (no stored marker yet) defaults to 24 hours ago and sets first_run=true. Pass course_id to scope to one course (per-course markers are tracked separately). Pass since to override the stored marker. Pass save:false to peek without advancing.",
+    inputSchema: {
+      course_id: z
+        .number()
+        .int()
+        .optional()
+        .describe(
+          "Restrict to a single course. The per-course last-seen marker is tracked separately from the global one.",
         ),
-      ),
-    ]);
-
-    const newAnnouncements = announcements
-      .filter((a: any) => Date.parse(a.posted_at) >= sinceMs)
-      .map((a: any) => {
-        const cid = Number(String(a.context_code).split("_")[1]);
-        return {
-          course: courseLookup.get(cid) ?? a.context_code,
-          title: a.title,
-          posted_at: a.posted_at,
-          url: a.html_url,
-        };
-      });
-
-    const newAssignments: any[] = [];
-    const newGrades: any[] = [];
-    for (let i = 0; i < courseIds.length; i++) {
-      const course = courseLookup.get(courseIds[i]) ?? `course_${courseIds[i]}`;
-      for (const a of perCourseAssignments[i]) {
-        if (a.created_at && Date.parse(a.created_at) >= sinceMs) {
-          newAssignments.push({
-            course,
-            name: a.name,
-            due_at: a.due_at,
-            points_possible: a.points_possible,
-            html_url: a.html_url,
-          });
-        }
-        const s = a.submission;
-        const gradedAt = s?.graded_at ? Date.parse(s.graded_at) : 0;
-        const postedAt = s?.posted_at ? Date.parse(s.posted_at) : 0;
-        if (Math.max(gradedAt, postedAt) >= sinceMs && s?.score != null) {
-          newGrades.push({
-            course,
-            assignment: a.name,
-            score: s.score,
-            points_possible: a.points_possible,
-            graded_at: s.graded_at,
-            posted_at: s.posted_at,
-            html_url: a.html_url,
-          });
-        }
-      }
+      since: z
+        .string()
+        .optional()
+        .describe("Override the stored marker with this ISO timestamp for this call."),
+      save: z
+        .boolean()
+        .optional()
+        .describe("Update the stored marker after reading. Defaults to true."),
+    },
+  },
+  async ({ course_id, since: sinceArg, save }) => {
+    const shouldSave = save !== false;
+    const state = await loadState();
+    const stored = getLastSeen(state, course_id);
+    let first_run = false;
+    let since: string;
+    if (sinceArg) {
+      since = sinceArg;
+    } else if (stored) {
+      since = stored;
+    } else {
+      since = daysAgoIso(1);
+      first_run = true;
     }
-
+    if (Number.isNaN(Date.parse(since))) {
+      return {
+        content: [{ type: "text" as const, text: `invalid ISO timestamp: ${since}` }],
+        isError: true,
+      };
+    }
+    const until = new Date().toISOString();
+    const diff = await computeChangedSince(since, course_id);
+    if (shouldSave) {
+      setLastSeen(state, course_id, until);
+      await saveState(state);
+    }
     return json({
+      first_run,
       since,
-      new_announcements: newAnnouncements,
-      new_assignments: newAssignments,
-      newly_graded: newGrades,
+      until,
+      saved: shouldSave,
+      course_id: course_id ?? null,
+      new_announcements: diff.new_announcements,
+      new_assignments: diff.new_assignments,
+      newly_graded: diff.newly_graded,
     });
   },
 );

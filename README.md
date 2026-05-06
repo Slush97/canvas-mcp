@@ -56,7 +56,7 @@ Built for students. Drop it into your Claude Code config and ask things like:
 
 ## Tools
 
-39 tools, all return JSON. Tools marked _(write)_ mutate Canvas state — there's no undo.
+40 tools, all return JSON. Tools marked _(write)_ mutate Canvas state — there's no undo.
 
 ### Identity and courses
 
@@ -87,6 +87,7 @@ Built for students. Drop it into your Claude Code config and ask things like:
 - `activity_stream(only_active=false)` — global notifications: announcements, conversations, submissions, grading.
 - `weekly_digest(lookback_days=7, lookahead_days=7)` — grades + recent announcements + upcoming + todo in one call.
 - `what_changed_since(iso_timestamp)` — new announcements, new assignments, newly graded since a moment.
+- `catch_up(course_id?, since?, save?=true)` — same diff, but pulls the timestamp from a local last-seen marker and advances it on success. First call defaults to 24h ago and returns `first_run:true`. Per-course markers tracked separately. State lives at `${XDG_STATE_HOME:-~/.local/state}/canvas-mcp/state.json` (Linux/Mac) or `%LOCALAPPDATA%\canvas-mcp\state.json` (Windows).
 
 ### Announcements and discussions
 

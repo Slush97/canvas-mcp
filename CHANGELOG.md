@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New runtime dependencies: `unpdf` (PDF text extraction) and `mammoth`
   (DOCX text extraction). Loaded via dynamic `import()` so they only count
   against startup when `read_file` is actually called.
+- `catch_up(course_id?, since?, save?=true)` — wraps `what_changed_since`
+  with a stored last-seen marker so the common case is zero-arg. First
+  call defaults to 24h ago and sets `first_run:true`. Pass `course_id` to
+  scope to one course (per-course markers are tracked separately). Pass
+  `since` to override the stored marker for one call. Pass `save:false` to
+  peek without advancing.
+- `src/state.ts`: a small persistent-state module with XDG-compliant
+  defaults (`${XDG_STATE_HOME:-~/.local/state}/canvas-mcp/state.json` on
+  Linux/Mac, `%LOCALAPPDATA%\canvas-mcp\state.json` on Windows). Atomic
+  writes via tmpfile + rename. Forward-incompatible state is treated as
+  empty rather than crashing.
+
+### Changed
+- `what_changed_since` now delegates to a shared `computeChangedSince`
+  helper, which `catch_up` also uses. No change to its public signature.
 
 ## [0.2.0] — 2026-05-06
 

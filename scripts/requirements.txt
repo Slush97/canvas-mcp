@@ -1,2 +1,5 @@
+# Needed to read Chrome/Brave/Edge/Chromium/Vivaldi sessions. Firefox-family
+# browsers need neither (their cookies are plaintext).
 pycryptodome
-secretstorage
+# Linux only: reads the browser's encryption key from the system keyring.
+secretstorage; sys_platform == "linux"

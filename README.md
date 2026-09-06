@@ -23,7 +23,7 @@ Then connect Canvas. Pick one:
 
 Best if your school hides access-token generation, or you'd rather not deal with tokens.
 
-1. Open **Brave** and log in to your school's Canvas.
+1. Open your browser and log in to your school's Canvas.
 2. In the `canvas-mcp` folder, run:
 
    ```sh
@@ -31,12 +31,16 @@ Best if your school hides access-token generation, or you'd rather not deal with
    npm run refresh-cookie
    ```
 
-That's it. It finds your Canvas session in Brave, connects, and saves everything
-to `.env` for you — no editing files, no copying tokens. It even detects your
-school automatically. If Canvas ever logs you out, just run `npm run refresh-cookie`
+That's it. It finds your Canvas session, connects, and saves everything to `.env`
+for you — no editing files, no copying tokens. It detects your school
+automatically. If Canvas ever logs you out, just run `npm run refresh-cookie`
 again. Nothing leaves your computer.
 
-_(Brave on Linux today. Other browsers can still use Option B.)_
+Works with **Brave, Chrome, Chromium, Edge, Vivaldi, Firefox, LibreWolf, and
+Zen** on **Linux and macOS**. If you use more than one browser, set
+`CANVAS_BROWSER=firefox` (or `chrome`, `brave`, ...) to pick one. On macOS,
+Chromium-based browsers will ask permission to read their key from your Keychain
+the first time — click Allow. (Windows isn't supported yet; use Option B there.)
 
 ### Option B — Use an access token
 

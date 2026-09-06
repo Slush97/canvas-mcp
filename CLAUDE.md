@@ -11,8 +11,11 @@ focused. TypeScript, Node 22+, MCP SDK over stdio.
 
 `src/index.ts` auto-loads `.env` from the repo root via `process.loadEnvFile`
 (real env vars still win). `scripts/refresh-cookie.py` extracts the Canvas
-session from Brave, decrypts it, and writes CANVAS_COOKIE + CANVAS_BASE_URL to
-`.env` — run via `npm run refresh-cookie`. Cookie auth: Canvas prefixes JSON
+session from any supported browser and writes CANVAS_COOKIE + CANVAS_BASE_URL to
+`.env` — run via `npm run refresh-cookie`. It handles Chromium-family browsers
+(key from the Linux keyring via secretstorage, or the macOS Keychain via
+`security`; PBKDF2 is 1 iteration on Linux, 1003 on macOS) and Firefox-family
+browsers (plaintext `moz_cookies`, no crypto). CANVAS_BROWSER forces one. Cookie auth: Canvas prefixes JSON
 with `while(1);` (stripped in `parseCanvasJson`) and writes need the
 `X-CSRF-Token` header from the `_csrf_token` cookie (see `authHeaders`).
 

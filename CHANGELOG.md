@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `CanvasClient` now retries a request once on `429` or on `403` whose
   body matches `/rate.?limit/i`, after a 2-second pause. If the retry
   also fails, the original Canvas error is surfaced.
+- Dependencies bumped to current majors: `zod` 4, `vitest` 5, `typescript` 7,
+  `@types/node` 26. TypeScript 7 no longer auto-includes `@types/*`, so
+  `tsconfig.json` now sets `types: ["node"]` explicitly.
 
 ## [0.2.0] — 2026-05-06
 

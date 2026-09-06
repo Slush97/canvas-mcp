@@ -369,3 +369,55 @@ describe("CanvasClient rate-limit retry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("CanvasClient cookie auth", () => {
+  const baseUrl = "https://canvas.test";
+  const cookie = "canvas_session=abc123; _csrf_token=tok%2Fwith%2Bslash%3D";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("sends the Cookie header instead of Authorization on reads", async () => {
+    const client = new CanvasClient({ baseUrl, cookie });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response('while(1);{"id":7}', { status: 200 }));
+    const me = await client.get<{ id: number }>("/users/self");
+    expect(me).toEqual({ id: 7 });
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers.Cookie).toBe(cookie);
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers["X-CSRF-Token"]).toBeUndefined();
+  });
+
+  it("adds a decoded X-CSRF-Token on writes", async () => {
+    const client = new CanvasClient({ baseUrl, cookie });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response('while(1);{"ok":true}', { status: 200 }));
+    const out = await client.post<{ ok: boolean }>("/conversations", { body: "hi" });
+    expect(out).toEqual({ ok: true });
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers["X-CSRF-Token"]).toBe("tok/with+slash=");
+  });
+
+  it("strips the while(1); prefix on paginated responses", async () => {
+    const client = new CanvasClient({ baseUrl, cookie });
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response("while(1);[1,2]", { status: 200 }),
+    );
+    expect(await client.paginate<number>("/courses")).toEqual([1, 2]);
+  });
+
+  it("prefers the bearer token when both are set", async () => {
+    const client = new CanvasClient({ baseUrl, token: "t", cookie });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("{}", { status: 200 }));
+    await client.get("/users/self");
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer t");
+    expect(headers.Cookie).toBeUndefined();
+  });
+});

@@ -4,21 +4,31 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { readFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
-import { CanvasClient } from "./canvas.js";
+import { CanvasClient, parseCanvasJson } from "./canvas.js";
 import { htmlToText, daysAgoIso, daysFromNowIso, extractText } from "./util.js";
 import { getLastSeen, loadState, saveState, setLastSeen } from "./state.js";
+import { fileURLToPath } from "node:url";
 
 const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024;
 
+// Load .env from the repo root if present, so `npm start` works without the
+// caller exporting these vars. An MCP client that sets env directly still wins.
+try {
+  process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
+} catch {
+  // no .env file — env is expected to come from the environment/MCP config
+}
+
 const baseUrl = process.env.CANVAS_BASE_URL;
 const token = process.env.CANVAS_TOKEN;
+const cookie = process.env.CANVAS_COOKIE;
 
-if (!baseUrl || !token) {
-  console.error("canvas-mcp: CANVAS_BASE_URL and CANVAS_TOKEN must be set");
+if (!baseUrl || (!token && !cookie)) {
+  console.error("canvas-mcp: CANVAS_BASE_URL and one of CANVAS_TOKEN / CANVAS_COOKIE must be set");
   process.exit(1);
 }
 
-const canvas = new CanvasClient({ baseUrl, token });
+const canvas = new CanvasClient({ baseUrl, token, cookie });
 const server = new McpServer({ name: "canvas-mcp", version: "0.1.0" });
 
 const json = (data: unknown) => ({
@@ -1714,17 +1724,14 @@ server.registerTool(
         if (!location) throw new Error(`Upload redirect with no Location for ${name}`);
         const confirm = await fetch(location, {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Length": "0",
-          },
+          headers: { ...canvas.authHeaders("POST"), "Content-Length": "0" },
         });
         if (!confirm.ok) {
           const t = await confirm.text();
           throw new Error(`File confirm failed for ${name}: ${confirm.status} ${t.slice(0, 300)}`);
         }
-        const fileData = await confirm.json();
-        fileId = fileData.id;
+        const fileData = parseCanvasJson(await confirm.text()) as { id?: unknown };
+        fileId = fileData.id as number | undefined;
       } else if (up.ok) {
         const fileData = await up.json();
         fileId = fileData.id;

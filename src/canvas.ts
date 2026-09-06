@@ -3,7 +3,8 @@ export type QueryParams = Record<string, QueryValue>;
 
 export interface CanvasClientOptions {
   baseUrl: string;
-  token: string;
+  token?: string;
+  cookie?: string;
 }
 
 const CACHE_TTL_MS = 60_000;
@@ -11,6 +12,17 @@ const CACHE_MAX = 256;
 const RETRY_DELAY_MS = 2000;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// Canvas prefixes JSON with `while(1);` when the request was authenticated by
+// session cookie rather than bearer token (anti JSON-hijacking).
+export function parseCanvasJson(text: string): unknown {
+  return JSON.parse(text.startsWith("while(1);") ? text.slice(9) : text);
+}
+
+function csrfFromCookie(cookie: string): string | undefined {
+  const match = cookie.match(/(?:^|;\s*)_csrf_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
 
 function isRateLimitedResponse(status: number, body: string): boolean {
   if (status === 429) return true;
@@ -20,14 +32,25 @@ function isRateLimitedResponse(status: number, body: string): boolean {
 
 export class CanvasClient {
   private readonly baseUrl: string;
-  private readonly token: string;
+  private readonly token?: string;
+  private readonly cookie?: string;
+  private readonly csrfToken?: string;
   private readonly cacheEnabled: boolean;
   private readonly cache = new Map<string, { value: unknown; expiresAt: number }>();
 
-  constructor({ baseUrl, token }: CanvasClientOptions) {
+  constructor({ baseUrl, token, cookie }: CanvasClientOptions) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.token = token;
+    this.cookie = cookie;
+    this.csrfToken = cookie ? csrfFromCookie(cookie) : undefined;
     this.cacheEnabled = process.env.CANVAS_NO_CACHE !== "1";
+  }
+
+  authHeaders(method = "GET"): Record<string, string> {
+    if (this.token) return { Authorization: `Bearer ${this.token}` };
+    const headers: Record<string, string> = { Cookie: this.cookie ?? "" };
+    if (method !== "GET" && this.csrfToken) headers["X-CSRF-Token"] = this.csrfToken;
+    return headers;
   }
 
   private buildUrl(path: string, params?: QueryParams): string {
@@ -90,10 +113,7 @@ export class CanvasClient {
     return this.fetchWithRetry(
       url,
       {
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          Accept: "application/json",
-        },
+        headers: { ...this.authHeaders(), Accept: "application/json" },
       },
       "GET",
     );
@@ -104,7 +124,7 @@ export class CanvasClient {
     const cached = this.cacheGet(url);
     if (cached !== undefined) return cached as T;
     const res = await this.request(url);
-    const value = (await res.json()) as T;
+    const value = parseCanvasJson(await res.text()) as T;
     this.cacheSet(url, value);
     return value;
   }
@@ -133,7 +153,7 @@ export class CanvasClient {
       {
         method,
         headers: {
-          Authorization: `Bearer ${this.token}`,
+          ...this.authHeaders(method),
           "Content-Type": "application/json",
           Accept: "application/json",
         },
@@ -146,7 +166,7 @@ export class CanvasClient {
     const text = await res.text();
     if (!text) return undefined as T;
     try {
-      return JSON.parse(text) as T;
+      return parseCanvasJson(text) as T;
     } catch {
       return text as unknown as T;
     }
@@ -157,7 +177,7 @@ export class CanvasClient {
     let url: string | null = this.buildUrl(path, { per_page: 100, ...params });
     while (url) {
       const res = await this.request(url);
-      const page = (await res.json()) as T[];
+      const page = parseCanvasJson(await res.text()) as T[];
       all.push(...page);
       url = parseNextLink(res.headers.get("link"));
     }

@@ -21,7 +21,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "refresh-cookie": "python3 scripts/refresh-cookie.py"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

@@ -1,6 +1,6 @@
 # canvas-mcp
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server that gives Claude (or any MCP client) read/write access to a Canvas LMS account using a personal access token. No admin involvement, no OAuth — Canvas lets students generate a token from user settings.
+A [Model Context Protocol](https://modelcontextprotocol.io) server that gives Claude (or any MCP client) read/write access to a Canvas LMS account. Authenticate with a Canvas access token, or just log in through your browser — no admin involvement, no OAuth.
 
 Built for students. Drop it into your Claude Code config and ask things like:
 
@@ -11,18 +11,38 @@ Built for students. Drop it into your Claude Code config and ask things like:
 
 ## Quick start
 
-1. **Generate a Canvas access token.**
-   In Canvas: Account → Settings → **Approved Integrations** → **+ New Access Token**. Copy it; it's only shown once. Treat it like a password.
+```sh
+git clone <repo> canvas-mcp && cd canvas-mcp
+npm install
+npm run build
+```
 
-2. **Build.**
+Then connect Canvas. Pick one:
+
+### Option A — Log in with your browser (easiest, no token)
+
+Best if your school hides access-token generation, or you'd rather not deal with tokens.
+
+1. Open **Brave** and log in to your school's Canvas.
+2. In the `canvas-mcp` folder, run:
 
    ```sh
-   git clone <repo> canvas-mcp && cd canvas-mcp
-   npm install
-   npm run build
+   pip install -r scripts/requirements.txt   # one time
+   npm run refresh-cookie
    ```
 
-3. **Configure auth.**
+That's it. It finds your Canvas session in Brave, connects, and saves everything
+to `.env` for you — no editing files, no copying tokens. It even detects your
+school automatically. If Canvas ever logs you out, just run `npm run refresh-cookie`
+again. Nothing leaves your computer.
+
+_(Brave on Linux today. Other browsers can still use Option B.)_
+
+### Option B — Use an access token
+
+1. In Canvas: Account → Settings → **Approved Integrations** → **+ New Access Token**.
+   Copy it; it's only shown once. Treat it like a password.
+2. Create your `.env`:
 
    ```sh
    cp .env.example .env
@@ -31,28 +51,25 @@ Built for students. Drop it into your Claude Code config and ask things like:
    #   CANVAS_TOKEN=<paste token>
    ```
 
-4. **Smoke test.**
+### Check it works
 
-   ```sh
-   set -a && . .env && set +a
-   printf '%s\n' \
-     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
-     '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-     '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"whoami","arguments":{}}}' \
-     | node dist/index.js
-   ```
+```sh
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
+  '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"whoami","arguments":{}}}' \
+  | node dist/index.js
+```
 
-   You should see your Canvas user object. If not, the token or base URL is wrong.
+You should see your Canvas user. The server reads `.env` automatically.
 
-5. **Wire into Claude Code.**
-   The bash wrapper keeps the token in `.env` only — it isn't duplicated into `~/.claude.json`.
+### Wire into Claude Code
 
-   ```sh
-   claude mcp add canvas -s user -- \
-     bash -c 'set -a && . /absolute/path/to/canvas-mcp/.env && set +a && exec node /absolute/path/to/canvas-mcp/dist/index.js'
-   ```
+```sh
+claude mcp add canvas -s user -- node /absolute/path/to/canvas-mcp/dist/index.js
+```
 
-   Verify with `claude mcp list`.
+Verify with `claude mcp list`. Credentials stay in `.env`; they aren't copied into `~/.claude.json`.
 
 ## Tools
 

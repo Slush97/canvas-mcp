@@ -12,7 +12,7 @@ is 7 days, default lookahead is 7 days.
 ## Required Canvas tools
 
 This skill assumes the `canvas-mcp` MCP server is connected. If `whoami` fails,
-stop and tell the user to check `CANVAS_BASE_URL` / `CANVAS_TOKEN` — don't keep
+stop and tell the user to check `CANVAS_BASE_URL` / `CANVAS_TOKEN` (or `CANVAS_COOKIE`) — don't keep
 calling tools.
 
 ## Steps

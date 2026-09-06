@@ -5,8 +5,16 @@ Repo guide for Claude Code (and other AI agents) working in this codebase.
 ## What this is
 
 A Model Context Protocol server that gives an AI client read/write access to a
-Canvas LMS account using a personal access token. Student-focused. TypeScript,
-Node 22+, MCP SDK over stdio.
+Canvas LMS account. Auth is either a personal access token (CANVAS_TOKEN) or a
+browser session cookie (CANVAS_COOKIE); token wins if both are set. Student-
+focused. TypeScript, Node 22+, MCP SDK over stdio.
+
+`src/index.ts` auto-loads `.env` from the repo root via `process.loadEnvFile`
+(real env vars still win). `scripts/refresh-cookie.py` extracts the Canvas
+session from Brave, decrypts it, and writes CANVAS_COOKIE + CANVAS_BASE_URL to
+`.env` — run via `npm run refresh-cookie`. Cookie auth: Canvas prefixes JSON
+with `while(1);` (stripped in `parseCanvasJson`) and writes need the
+`X-CSRF-Token` header from the `_csrf_token` cookie (see `authHeaders`).
 
 ## Layout
 
